@@ -1,4 +1,4 @@
-"""The CLI Bot: assembles the engine + Google search + progress persistence.
+"""The CLI Bot: assembles the engine + search + progress persistence.
 
 This is the config-driven, file-backed orchestrator behind the ``formharvester``
 command. It overrides the core status hooks to persist progress to disk.

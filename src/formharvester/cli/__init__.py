@@ -41,10 +41,10 @@ def run(
     profile: Annotated[str | None, typer.Option("--profile", "-p", help="Campaign profile to run.")] = None,
     headless: Annotated[bool | None, typer.Option(help="Hide the browser window.")] = None,
     send_form: Annotated[bool | None, typer.Option(help="Submit contact forms once filled.")] = None,
-    skip_ads: Annotated[bool | None, typer.Option(help="Skip Google ad results.")] = None,
+    skip_ads: Annotated[bool | None, typer.Option(help="Skip ad results.")] = None,
     max_time: Annotated[int | None, typer.Option(help="Seconds allowed per site.")] = None,
-    max_pages: Annotated[int | None, typer.Option(help="Google result pages per query.")] = None,
-    start_page: Annotated[int | None, typer.Option(help="Google page to start from.")] = None,
+    max_pages: Annotated[int | None, typer.Option(help="Result pages to walk per query.")] = None,
+    start_page: Annotated[int | None, typer.Option(help="Results page to start from.")] = None,
 ) -> None:
     """Run the harvest loop, resuming any unfinished progress."""
     settings, campaign = _load(profile)
@@ -75,6 +75,53 @@ def run(
             bot.run()
     finally:
         bot.close()
+
+
+@cli.command()
+def discover(
+    query: Annotated[list[str], typer.Argument(help="Search terms. Repeat for several.")],
+    max_pages: Annotated[int | None, typer.Option(help="Result pages to walk per query.")] = None,
+    start_page: Annotated[int | None, typer.Option(help="Results page to start from.")] = None,
+    headless: Annotated[bool | None, typer.Option(help="Hide the browser window.")] = None,
+    keyword: Annotated[
+        list[str] | None,
+        typer.Option("--keyword", "-k", help="Only keep URLs containing this. Repeat to allow several."),
+    ] = None,
+) -> None:
+    """Search the web and print the site URLs found, one per line.
+
+    Read-only: nothing is submitted, and no progress or ledger files are
+    touched. Pipe it into a file to build a target list.
+    """
+    from formharvester.api import CaptchaError, FormFillDetails, FormHarvester, HarvesterOptions
+
+    settings = load_settings()
+    google = settings.google
+
+    options = HarvesterOptions(
+        send_form=False,
+        headless=settings.engine.headless if headless is None else headless,
+        skip_ads=settings.engine.skip_ads,
+        start_page=start_page if start_page is not None else google.start_page,
+        max_pages=max_pages if max_pages is not None else google.max_pages,
+        min_delay=google.min_delay,
+        max_delay=google.max_delay,
+        search_timer=google.search_timer,
+        captcha_sleep=google.captcha_sleep,
+        keywords=list(keyword or []),
+        captcha_provider=settings.captcha.provider or None,
+        dbc_username=settings.captcha.dbc_username or None,
+        dbc_password=settings.captcha.dbc_password or None,
+        twocaptcha_api_key=settings.captcha.twocaptcha_api_key or None,
+    )
+
+    try:
+        with FormHarvester(FormFillDetails(), options) as harvester:
+            for url in harvester.discover_many(query):
+                typer.echo(url)
+    except CaptchaError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
 
 
 @cli.command()

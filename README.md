@@ -42,7 +42,7 @@ Scraped emails, progress files and error logs are written to `data/` and
 
 `formharvester gui` opens three tabs: **Run** picks the active campaign and
 streams the live console, **Campaign** edits the form-fill details and query
-list, **Settings** covers the engine, Google pacing and the captcha solver.
+list, **Settings** covers the engine, search pacing and the captcha solver.
 
 ### From the CLI
 
@@ -56,6 +56,8 @@ formharvester profile create solar
 formharvester profile use solar
 
 formharvester run --profile solar --headless --max-pages 5
+
+formharvester discover "roofing companies austin" > targets.txt
 ```
 
 Flags on `run` override the saved settings for that run only.
@@ -66,14 +68,14 @@ Flags on `run` override the saved settings for that run only.
 | --- | --- |
 | `engine.send_form` | Submit the contact form once filled. Disable to save time. |
 | `engine.headless` | Run the browser hidden. |
-| `engine.skip_ads` | Skip ad results on Google Search. |
+| `engine.skip_ads` | Skip ad results. |
 | `engine.max_time` | Seconds allowed per website. |
 | `engine.generate_email_sources` | Also record the URL each email came from. |
 | `engine.debug_form` | Fill forms but never submit them. |
-| `google.start_page` | Google results page to start from. |
+| `google.start_page` | Results page to start from. |
 | `google.max_pages` | Result pages to walk per query. |
 | `google.min_delay` / `google.max_delay` | Random delay range, in seconds, between searches. |
-| `google.captcha_sleep` | Minutes to pause after a Google captcha. 0 disables. |
+| `google.captcha_sleep` | Minutes to pause after a search captcha. 0 disables. |
 | `google.search_timer` | Minutes between search batches. |
 | `captcha.provider` | `deathbycaptcha`, `2captcha`, `none`, or blank to auto-detect from the credentials you filled in. |
 | `captcha.twocaptcha_api_key` | 2captcha API key. |
@@ -98,7 +100,8 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
     result = fh.harvest("https://acme.com")
     print(result.status, result.submitted, result.emails)
 
-    for r in fh.harvest_many(["https://a.com", "https://b.com"]):
+    urls = fh.discover("roofing companies austin")   # search -> site URLs
+    for r in fh.harvest_many(urls):
         print(r.url, r.status)
 ```
 
@@ -107,14 +110,17 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
 One-shot helpers `harvest_site(url, details)` and `harvest_sites(urls, details)`
 are also available.
 
-## Package layout (2.4.0)
+`discover()` raises `CaptchaError` rather than blocking; set
+`HarvesterOptions.captcha_sleep` to wait it out instead.
+
+## Package layout (2.4.1)
 
 ```
 src/formharvester/
 ├── __init__.py          # public API (FormHarvester, FormFillDetails, …)
 ├── api.py               # library API
 ├── engine/              # Selenium browser engine + Chrome driver
-├── scraper/             # Google search + email scraping
+├── scraper/             # web search + email scraping
 ├── form_handler/        # contact-page discovery, field fill, submit
 ├── captcha/             # solver providers (DeathByCaptcha, 2captcha) + detection
 ├── settings.py          # JSON settings, profiles and file locations

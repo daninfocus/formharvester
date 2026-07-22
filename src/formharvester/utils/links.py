@@ -4,12 +4,14 @@ EMAIL_RGX = r"""(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+
 
 
 def filter_scraped_links(keywords, url_list):
-    output = set()
+    if not keywords:
+        return list(url_list)
+
+    output = {}
     for url in url_list:
-        url = url
         for keyword in keywords:
             if keyword in url:
-                output.add(url)
+                output[url] = None
                 break
     return list(output)
 

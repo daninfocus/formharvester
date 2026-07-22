@@ -82,7 +82,7 @@ class GoogleSettings(BaseModel):
     max_pages: int = Field(default=3, ge=1)
     min_delay: int = Field(default=8, ge=0, description="Seconds between searches")
     max_delay: int = Field(default=25, ge=0)
-    captcha_sleep: int = Field(default=60, ge=0, description="Minutes to pause after a Google captcha, 0 disables")
+    captcha_sleep: int = Field(default=60, ge=0, description="Minutes to pause after a search captcha, 0 disables")
     search_timer: int = Field(default=20, ge=0, description="Minutes between search batches")
 
     @model_validator(mode="after")

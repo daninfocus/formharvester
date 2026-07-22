@@ -17,6 +17,7 @@ from __future__ import annotations
 import threading
 import time
 import traceback
+from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Literal
@@ -26,16 +27,24 @@ from rich.console import Console
 from formharvester.captcha import create_solver
 from formharvester.captcha.base import CaptchaSolver
 from formharvester.core import HarvesterCore
+from formharvester.scraper import GoogleSearchMixin
 
 __all__ = [
     "FormFillDetails",
     "FormHarvester",
+    "CaptchaError",
     "HarvestResult",
     "HarvestStatus",
     "HarvesterOptions",
+    "discover_sites",
     "harvest_site",
     "harvest_sites",
 ]
+
+
+class CaptchaError(RuntimeError):
+    """The search engine served a captcha and no wait was configured to sit it out."""
+
 
 # The per-site outcomes the engine can report - the same tokens the CLI writes.
 HarvestStatus = Literal[
@@ -93,6 +102,15 @@ class HarvesterOptions:
     dbc_password: str | None = None
     twocaptcha_api_key: str | None = None
 
+    skip_ads: bool = False
+    start_page: int = 1
+    max_pages: int = 3
+    min_delay: int = 8
+    max_delay: int = 25
+    search_timer: int = 0
+    captcha_sleep: int = 0
+    keywords: list[str] = field(default_factory=list)
+
     def resolve_solver(self) -> CaptchaSolver | None:
         if self.captcha_solver is not None:
             return self.captcha_solver
@@ -117,7 +135,32 @@ class HarvestResult:
         return self.status == "SUBMITTED"
 
 
-class FormHarvester(HarvesterCore):
+class _InMemoryProgress:
+    """In-memory stand-ins for the CLI's file-backed progress hooks.
+
+    ``GoogleSearchMixin`` records progress as it walks result pages so the CLI
+    can resume an interrupted run. A library ``discover()`` call is a single
+    in-process operation with nothing to resume, so these do nothing.
+
+    This must stay last in :class:`FormHarvester`'s bases: the CLI's ``Bot``
+    mixes in the real :class:`~formharvester.cli.progress.ProgressMixin`, and
+    nothing here may shadow it.
+    """
+
+    def log_remaining_pages(self) -> None:
+        return None
+
+    def write_progress(self, term_list: Iterable[str], google: bool) -> None:
+        return None
+
+    def update_progress(self, term: str, status: str, google: bool) -> None:
+        return None
+
+    def get_website_log(self) -> list[str]:
+        return []
+
+
+class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
     """Library-friendly driver over the shared engine.
 
     Constructs without reading any files, manages the browser lifecycle, and
@@ -150,6 +193,20 @@ class FormHarvester(HarvesterCore):
         self.threads: list[threading.Thread] = []
         self.last_status: str | None = None
 
+        self.skip_ads = opts.skip_ads
+        self.start_page = opts.start_page
+        self.max_google_pages = opts.max_pages
+        self.MIN_DELAY = opts.min_delay
+        self.MAX_DELAY = opts.max_delay
+        self.GOOGLE_TIMER = opts.search_timer
+        self.CAPTCHA_SLEEP = opts.captcha_sleep
+        self.keywords = list(opts.keywords)
+        self.google_term: str | None = None
+        self.google_query: str | None = None
+        self.google_timer: threading.Thread | None = None
+        self.current_page: int | None = None
+        self.remaining_pages_log: dict[str, list[int]] = defaultdict(list)
+
         self.create_driver()
 
     def check_time(self) -> None:
@@ -160,6 +217,61 @@ class FormHarvester(HarvesterCore):
                 self.crawl = False
                 return
             time.sleep(0.5)
+
+    def check_google_captcha(self) -> None:
+        """Raise instead of blocking on the CLI's "solve it yourself" prompt.
+
+        The CLI can sit and wait for a human; a library caller cannot. With
+        ``captcha_sleep`` set we still fall back to the shared wait-and-
+        retry behaviour.
+        """
+        if self.css('input[type="text"]'):
+            return
+        if self.CAPTCHA_SLEEP:
+            super().check_google_captcha()
+            return
+        raise CaptchaError(
+            "The search engine served a captcha. Set HarvesterOptions.captcha_sleep "
+            "to wait it out, or slow down with min_delay/max_delay/search_timer."
+        )
+
+    def wait_google_timer(self) -> None:
+        """Join the pacing thread without the CLI's detour to a clock page."""
+        if self.google_timer:
+            self.google_timer.join()
+            self.google_timer = None
+
+    def discover(
+        self,
+        query: str,
+        *,
+        max_pages: int | None = None,
+        start_page: int | None = None,
+    ) -> list[str]:
+        """Search the web for ``query`` and return the site root URLs it found.
+
+        Results are de-duplicated by root domain and filtered by
+        ``HarvesterOptions.keywords`` when any are set. Feed them straight to
+        :meth:`harvest_many`.
+        """
+        if max_pages is not None:
+            self.max_google_pages = max_pages
+        if start_page is not None:
+            self.start_page = start_page
+
+        self.remaining_pages_log = defaultdict(list)
+        return list(self.start_process_google([query]) or [])
+
+    def discover_many(self, queries: Iterable[str]) -> list[str]:
+        """Run several queries, preserving order and dropping repeats."""
+        seen: set[str] = set()
+        found: list[str] = []
+        for query in queries:
+            for url in self.discover(query):
+                if url not in seen:
+                    seen.add(url)
+                    found.append(url)
+        return found
 
     def harvest(self, url: str) -> HarvestResult:
         """Harvest one site: scrape emails and (optionally) submit its form."""
@@ -221,3 +333,14 @@ def harvest_sites(
     """Convenience: harvest many URLs with one browser session."""
     with FormHarvester(details, options) as harvester:
         return list(harvester.harvest_many(urls))
+
+
+def discover_sites(
+    queries: str | Iterable[str],
+    options: HarvesterOptions | None = None,
+) -> list[str]:
+    """Convenience one-shot: search for ``queries`` and return the URLs found."""
+    if isinstance(queries, str):
+        queries = [queries]
+    with FormHarvester(FormFillDetails(), options) as harvester:
+        return harvester.discover_many(queries)
