@@ -39,7 +39,16 @@ Sleep for `X` minutes after a Google captcha is found. 0 to disable.
 A waiting time (in minutes) between the last google search and the next one.
 
 #### `[captcha]`
-Here you can enter deathbycaptcha credentials to solve captchas automatically.
+Configure an automatic captcha solver. Set `provider` to `deathbycaptcha`,
+`2captcha`, or `none` (blank auto-detects from whichever credentials you fill in):
+
+```ini
+[captcha]
+provider = 2captcha
+dbc_username =
+dbc_password =
+twocaptcha_api_key = your_2captcha_key
+```
 
 #### `[dev]`
 Disable in production. They are used for development reasons. `debug_form` may be useful, as it prevents the form from submitting.
@@ -50,11 +59,54 @@ Disable in production. They are used for development reasons. `debug_form` may b
 `Run formharvester.exe`
 
 #### Python
-`pip install -r requirements.txt`
+```bash
+pip install -e .
+formharvester          # runs the config-driven harvest loop (reads config.txt)
+```
 
-`python3 bot.py`
+## Programmatic use (library API)
 
-## Folder structure
+Since `0.2.0` FormHarvester ships a library API so you can drive the engine from
+your own code - no `config.txt`, input CSV or progress files required. The CLI
+is unchanged.
+
+```python
+from formharvester import FormHarvester, FormFillDetails, HarvesterOptions
+
+details = FormFillDetails(
+    first_name="Jane", last_name="Doe",
+    email="jane@example.com", phone="1234567890",
+    subject="Enquiry", message="Hi, I'd like a quote.",
+)
+
+with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as fh:
+    result = fh.harvest("https://acme.com")
+    print(result.status, result.submitted, result.emails)
+
+    for r in fh.harvest_many(["https://a.com", "https://b.com"]):
+        print(r.url, r.status)
+```
+
+`result.status` is one of `SUBMITTED`, `FORM_NOT_FOUND`, `BUTTON_NOT_FOUND`,
+`VISITED`, or `ERROR` - the same tokens the CLI writes to its progress file.
+One-shot helpers `harvest_site(url, details)` and `harvest_sites(urls, details)`
+are also available.
+
+## Package layout (0.2.0)
+
+```
+src/formharvester/
+├── __init__.py          # public API (FormHarvester, FormFillDetails, …)
+├── api.py               # library API
+├── engine/              # Selenium browser engine + Chrome driver
+├── scraper/             # Google search + email scraping
+├── form_handler/        # contact-page discovery, field fill, submit
+├── captcha/             # solver providers (DeathByCaptcha, 2captcha) + detection
+├── cli/                 # config.txt loader + run loop (`formharvester` command)
+└── utils/               # root-domain, email regex, link filters
+```
+
+## Folder structure (runtime)
 
 #### data
 Where scraped emails and logs are dumped.
