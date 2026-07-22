@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "formharvester"
-version = "0.2.0"
+version = "2.3.0"
 description = "AI-assisted form intelligence engine: search, scrape contacts, and submit forms"
 readme = "README.md"
 license = {text = "MIT"}

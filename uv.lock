@@ -271,7 +271,7 @@ wheels = [
 
 [[package]]
 name = "formharvester"
-version = "0.2.0"
+version = "2.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },

@@ -66,7 +66,7 @@ formharvester          # runs the config-driven harvest loop (reads config.txt)
 
 ## Programmatic use (library API)
 
-Since `0.2.0` FormHarvester ships a library API so you can drive the engine from
+Since `2.3.0` FormHarvester ships a library API so you can drive the engine from
 your own code - no `config.txt`, input CSV or progress files required. The CLI
 is unchanged.
 
@@ -92,7 +92,7 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
 One-shot helpers `harvest_site(url, details)` and `harvest_sites(urls, details)`
 are also available.
 
-## Package layout (0.2.0)
+## Package layout (2.3.0)
 
 ```
 src/formharvester/
