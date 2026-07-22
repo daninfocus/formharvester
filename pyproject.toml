@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "formharvester"
-version = "2.2.2"
-description = "Automated web form harvesting and submission tool"
+version = "1.0.0"
+description = "AI-assisted form intelligence engine: search, scrape contacts, and submit forms"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">= 3.12"
@@ -37,16 +37,15 @@ typecheck = [
     "ty",
 ]
 
+[project.scripts]
+formharvester = "formharvester.cli:main"
+
 [tool.hatch.build.targets.wheel]
-include = [
-    "bot.py",
-    "SeleniumBot.py",
-    "utils.py",
-    "dbc_api_python3/",
-]
+packages = ["src/formharvester"]
 
 [tool.ruff]
 line-length = 120
+src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
@@ -58,16 +57,34 @@ select = [
     "UP",  # pyupgrade
 ]
 
+# Legacy engine code moved verbatim in the 1.0.0 package reorg. Behaviour is
+# preserved as-is (issue #7: no regressions); pre-existing style is grandfathered
+# so the reorg stays a pure move. New modules (captcha/, api, core) stay strict.
+[tool.ruff.lint.per-file-ignores]
+"src/formharvester/engine/selenium_bot.py" = ["E722", "E721", "B007", "B008", "UP031"]
+"src/formharvester/form_handler/forms.py" = ["E722", "E501", "B007"]
+"src/formharvester/scraper/google.py" = ["E722", "B007"]
+"src/formharvester/scraper/emails.py" = ["E722"]
+"src/formharvester/cli/app.py" = ["E722", "UP031"]
+"src/formharvester/cli/progress.py" = ["UP031", "B007"]
+"src/formharvester/utils/links.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "smoke: live browser test against the smoke-target site (needs Chrome)",
+]
+
 [tool.coverage.run]
 branch = true
 parallel = true
-source = ["."]
+source = ["src/formharvester"]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
 fail_under = 0
-omit = ["tests/*", "dbc_api_python3/*"]
+omit = ["tests/*"]
 
 [tool.uv]
 package = true

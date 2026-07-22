@@ -1,23 +1,20 @@
-import json
 import os
 import random
 import re
 import sys
 import time
-from urllib.parse import urljoin, parse_qs, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common.exceptions import (
     NoSuchElementException,
+    TimeoutException,
 )
-from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait, Select
-import html
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
@@ -27,7 +24,6 @@ elif __file__:
 
 class SeleniumBot:
     driver = None
-    captcha_client = None
 
     DEV_SETTINGS = None
     COOKIES_PROFILE = None
@@ -516,100 +512,7 @@ class SeleniumBot:
             element = self.css(element)
         self.driver.execute_script("arguments[0].style.border='6px groove green'", element)
 
-    def check_captcha(self,
-                      recaptcha=False,
-                      image=False):
 
-        if image:
-            # Captcha 1 (image)
-            src = self.xpath('//img[contains(@class, "captcha") or contains(@src, "captcha")]',
-                             attr='src')
-            if src:
-                return urljoin(self.driver.current_url, src)
-
-        if recaptcha:
-            # Captcha 1
-            site_key = self.css('.g-recaptcha', attr='data-sitekey')
-            if site_key:
-                return site_key
-
-            # Captcha 2
-            site_key = self.xpath('//*[contains(@class, "recaptcha") and @data-sitekey]', attr='data-sitekey')
-            if site_key:
-                return site_key
-
-            # Captcha 3
-            src = self.css('.grecaptcha-logo>iframe', attr='src')
-            if src:
-                src = html.unescape(src)
-                site_key = parse_qs(urlparse(src).query)['k'][0]
-                return site_key
-
-            # Captcha 4
-            src = self.xpath('//iframe[contains(@src, "recaptcha") and contains(@src, "k=")]',
-                             attr='src')
-            if src:
-                src = html.unescape(src)
-                site_key = parse_qs(urlparse(src).query)['k'][0]
-                return site_key
-        return None
-
-    def solve_captcha(self, site_key, recaptcha=False, image=False):
-        if image:
-            captcha = self.captcha_client.decode(site_key)
-            if captcha:
-                return captcha.get('text')
-
-        if recaptcha:
-            payload = {
-                'googlekey': site_key,
-                'pageurl': self.driver.current_url,
-            }
-
-            captcha = self.captcha_client.decode(type=4, token_params=json.dumps(payload))
-            if captcha:
-                print(captcha)
-                captcha_response = self.css('#g-recaptcha-response')
-                if captcha_response:
-                    self.script(f'''
-                    arguments[0].innerHTML='{captcha['text']}'
-                    ''', captcha_response)
-                else:
-                    captcha_response = self.xpath(
-                        '//input[contains(@class, "captcha") or contains(@name, "captcha") or contains(@id, "captcha")]'
-                    )
-                    if captcha_response:
-                        self.script(f'''
-                        arguments[0].innerHTML='{captcha['text']}'
-                        ''', captcha_response)
-                return True
-
-    def check_solve_captchas(self, recaptcha=False, image=False):
-
-        if self.captcha_client:
-
-            if recaptcha:
-                site_key = self.check_captcha(recaptcha=True)
-                if site_key:
-                    return self.solve_captcha(
-                        site_key,
-                        recaptcha=True,
-                    )
-                else:
-                    return None
-
-            if image:
-                img_url = self.check_captcha(image=True)
-                if img_url:
-                    self.download_file(img_url, 'captcha.png')
-                    return self.solve_captcha(
-                        'captcha.png',
-                        image=True,
-                    )
-                else:
-                    return None
-
-    @staticmethod
     def download_file(url, path=BASE_DIR):
         with open(path, 'wb') as f:
             r = requests.get(url)
@@ -629,3 +532,49 @@ class SeleniumBot:
 
         else:
             time.sleep(random.uniform(self.MIN_RAND, self.MAX_RAND))
+
+    def create_driver(self):
+
+        chrome_options = webdriver.ChromeOptions()
+
+        if self.DEV_SETTINGS:
+            chrome_options.add_argument('--fast-start')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--window-position=1072,642')
+
+        if self.HEADLESS:
+            chrome_options.add_argument('--headless')
+
+        chrome_options.add_argument("--silent")
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument("--log-level=3")
+        chrome_options.add_argument('--start-maximized')
+        chrome_options.add_argument('--disable-infobars')
+        # chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        chrome_options.add_argument('--disable-notifications')
+        chrome_options.add_argument("--disable-plugins-discovery")
+        # chrome_options.add_argument('--profile-directory=default')
+        chrome_options.add_experimental_option("excludeSwitches",
+                                               ["enable-automation",
+                                                # "ignore-certificate-errors",
+                                                "safebrowing-disable-auto-update",
+                                                "disable-client-side-phishing-detection",
+                                                "safebrowsing-disable-download-protection",
+                                                "enable-logging"  # Disable logging
+                                                ])
+
+        self.driver = webdriver.Chrome(options=chrome_options)
+
+        self.driver.maximize_window()
+
+    def spawn_driver(self):
+        if not self.driver:
+            self.create_driver()
+
+    def restart_driver(self):
+        if self.driver:
+            self.close()
+            time.sleep(3)
+        self.create_driver()

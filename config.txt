@@ -16,8 +16,11 @@ captcha_sleep = 60
 search_timer = 20
 
 [captcha]
-dbc_user =
+# provider: deathbycaptcha | 2captcha | none  (blank = auto-detect from creds)
+provider =
+dbc_username =
 dbc_password =
+twocaptcha_api_key =
 
 [dev]
 enabled = True

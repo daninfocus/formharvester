@@ -25,8 +25,3 @@ def get_root_url(url):
     else:
         output = 'http://' + output
     return output
-
-
-if __name__ == '__main__':
-    root = get_root_url('https://www.expertise.com/co/denver/lawn-service')
-    print(root)
