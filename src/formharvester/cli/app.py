@@ -6,12 +6,9 @@ command. It overrides the core status hooks to persist progress to disk.
 
 from __future__ import annotations
 
-import configparser
-import csv
 import traceback
 from collections import defaultdict
 
-import pandas as pd
 from rich import pretty
 from rich.console import Console
 
@@ -19,6 +16,7 @@ from formharvester.captcha import create_solver
 from formharvester.cli.progress import ProgressMixin
 from formharvester.core import __FIGLET__, HarvesterCore
 from formharvester.scraper import GoogleSearchMixin
+from formharvester.settings import CampaignProfile, Settings, data_dir, log_dir
 from formharvester.utils import get_root_url
 
 
@@ -76,65 +74,49 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
             # Re-enable crawl
             self.crawl = True
 
-    @staticmethod
-    def read_csv(filename):
-        with open(filename, encoding="utf-8-sig") as f:
-            data = csv.DictReader(f)
-            return list(data)
-
-    @staticmethod
-    def export_csv(obj, filename="output.csv"):
-        df = pd.DataFrame(obj)
-        df.to_csv(filename, index=False)
-
-    def __init__(self):
+    def __init__(self, settings: Settings, profile: CampaignProfile):
         pretty.install()
         self.c = Console()
         self.bot_print(__FIGLET__, figlet=True)
 
-        config = configparser.ConfigParser()
-        config.read("config.txt")
-        self.mode = config.get("settings", "mode")
-        self.skip_ads = config.getboolean("settings", "skip_ads")
-        self.send_form = config.getboolean("settings", "send_form")
-        self.generate_email_sources = config.getboolean("settings", "generate_email_sources")
-        self.max_time = config.getint("settings", "max_time")
+        self.settings = settings
+        self.profile = profile
 
-        self.HEADLESS = config.getboolean("settings", "hide_browser")
-        self.DEV_SETTINGS = config.getboolean("dev", "enabled")
-        self.DEBUG = config.getboolean("dev", "debug_form")
+        engine, google, captcha = settings.engine, settings.google, settings.captcha
+        self.mode = profile.name
+        self.skip_ads = engine.skip_ads
+        self.send_form = engine.send_form
+        self.generate_email_sources = engine.generate_email_sources
+        self.max_time = engine.max_time
 
-        self.start_page = config.getint("google", "start_page")
-        self.max_google_pages = config.getint("google", "max_google_pages")
-        self.MIN_DELAY = config.getint("google", "min_delay")
-        self.MAX_DELAY = config.getint("google", "max_delay")
-        self.CAPTCHA_SLEEP = config.getint("google", "captcha_sleep")
-        self.GOOGLE_TIMER = config.getint("google", "search_timer")
+        self.HEADLESS = engine.headless
+        self.DEV_SETTINGS = engine.debug_form
+        self.DEBUG = engine.debug_form
+
+        self.start_page = google.start_page
+        self.max_google_pages = google.max_pages
+        self.MIN_DELAY = google.min_delay
+        self.MAX_DELAY = google.max_delay
+        self.CAPTCHA_SLEEP = google.captcha_sleep
+        self.GOOGLE_TIMER = google.search_timer
 
         self.captcha_solver = create_solver(
-            config.get("captcha", "provider", fallback=None),
-            dbc_username=config.get("captcha", "dbc_username", fallback=None)
-            or config.get("captcha", "dbc_user", fallback=None),
-            dbc_password=config.get("captcha", "dbc_password", fallback=None),
-            twocaptcha_api_key=config.get("captcha", "twocaptcha_api_key", fallback=None),
+            captcha.provider or None,
+            dbc_username=captcha.dbc_username or None,
+            dbc_password=captcha.dbc_password or None,
+            twocaptcha_api_key=captcha.twocaptcha_api_key or None,
         )
 
-        self.visited_websites = self.load_txt("data/website_log.txt")  # visited urls globally (scraper)
+        # Runtime output lives beside the config, not in the working directory:
+        # the executable is launched from wherever the user keeps it.
+        self.data_dir = data_dir()
+        self.log_dir = str(log_dir())
 
-        obj_list = self.read_csv(f"input/{self.mode}.csv")
-        self.details = {
-            "first_name": obj_list[0].get("First Name"),
-            "last_name": obj_list[0].get("Last Name"),
-            "phone": obj_list[0].get("Phone"),
-            "email": obj_list[0].get("Email"),
-            "location": obj_list[0].get("Location"),
-            "city": obj_list[0].get("City"),
-            "state": obj_list[0].get("State"),
-            "subject": obj_list[0].get("Subject"),
-            "message": obj_list[0].get("Message"),
-        }
-        self.google_queries = [i.get("Google Queries") for i in obj_list if i.get("Google Queries")]
-        self.keywords = [i.get("Keywords") for i in obj_list if i.get("Keywords")]
+        self.visited_websites = self.load_txt(self.website_log_file)  # visited urls globally (scraper)
+
+        self.details = profile.form_fill.as_engine_details()
+        self.google_queries = list(profile.queries)
+        self.keywords = list(profile.keywords)
         self.write_progress(self.google_queries, google=True)
 
         self.name_filled = False
@@ -160,5 +142,5 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
 
     def _note_visited(self, url):
         super()._note_visited(url)
-        with open("data/website_log.txt", "a") as f:
+        with open(self.website_log_file, "a") as f:
             f.write(get_root_url(url) + "\n")

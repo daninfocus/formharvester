@@ -16,6 +16,7 @@ mixin module) without affecting the real runtime MRO.
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from typing import Any, Protocol
 
 from selenium import webdriver
@@ -34,6 +35,10 @@ class EngineProtocol(Protocol):
     HEADLESS: bool | None
     DEV_SETTINGS: bool | None
     DEBUG: bool
+    log_dir: str
+
+    # --- output locations (cli.app.Bot.__init__) ---------------------------
+    data_dir: Path
 
     # --- form-fill / harvest state (Bot.__init__ / FormHarvester.__init__) -
     details: dict[str, str]

@@ -25,6 +25,10 @@ elif __file__:
 class SeleniumBot:
     _driver: webdriver.Chrome | None = None
 
+    # Where log() writes page dumps and screenshots. The CLI and GUI point this
+    # at the config directory; library callers keep the working directory.
+    log_dir = "log"
+
     DEV_SETTINGS = None
     COOKIES_PROFILE = None
     HEADLESS = None
@@ -497,11 +501,11 @@ class SeleniumBot:
     def log(self, screenshot=False, error=None):
         try:
             timestamp = str(int(time.time()))
-            filename = os.path.join("log", timestamp)
+            filename = os.path.join(self.log_dir, timestamp)
             output = ""
 
-            if not os.path.exists("log"):
-                os.mkdir("log")
+            if not os.path.exists(self.log_dir):
+                os.makedirs(self.log_dir, exist_ok=True)
 
             if screenshot:
                 self.save_screenshot(f"{filename}.png")

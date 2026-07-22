@@ -2,27 +2,182 @@
 
 from __future__ import annotations
 
-from formharvester.cli.app import Bot
+from typing import Annotated
 
-__all__ = ["Bot", "main"]
+import typer
+from pydantic import ValidationError
+
+from formharvester.cli.app import Bot
+from formharvester.core import __VERSION__
+from formharvester.settings import (
+    CampaignProfile,
+    Settings,
+    config_home,
+    list_profiles,
+    load_profile,
+    load_settings,
+    save_profile,
+    save_settings,
+)
+
+__all__ = ["Bot", "cli", "main"]
+
+cli = typer.Typer(
+    help="FormHarvester: search the web, scrape contacts and submit forms.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+
+
+def _load(profile_name: str | None) -> tuple[Settings, CampaignProfile]:
+    """Load settings and the requested profile."""
+    settings = load_settings()
+    name = profile_name or settings.active_profile
+    return settings, load_profile(name)
+
+
+@cli.command()
+def run(
+    profile: Annotated[str | None, typer.Option("--profile", "-p", help="Campaign profile to run.")] = None,
+    headless: Annotated[bool | None, typer.Option(help="Hide the browser window.")] = None,
+    send_form: Annotated[bool | None, typer.Option(help="Submit contact forms once filled.")] = None,
+    skip_ads: Annotated[bool | None, typer.Option(help="Skip Google ad results.")] = None,
+    max_time: Annotated[int | None, typer.Option(help="Seconds allowed per site.")] = None,
+    max_pages: Annotated[int | None, typer.Option(help="Google result pages per query.")] = None,
+    start_page: Annotated[int | None, typer.Option(help="Google page to start from.")] = None,
+) -> None:
+    """Run the harvest loop, resuming any unfinished progress."""
+    settings, campaign = _load(profile)
+
+    # Flags override the saved settings for this run only.
+    overrides = {
+        "headless": headless,
+        "send_form": send_form,
+        "skip_ads": skip_ads,
+        "max_time": max_time,
+    }
+    engine = settings.engine.model_copy(update={k: v for k, v in overrides.items() if v is not None})
+    google_overrides = {"max_pages": max_pages, "start_page": start_page}
+    google = settings.google.model_copy(update={k: v for k, v in google_overrides.items() if v is not None})
+    settings = settings.model_copy(update={"engine": engine, "google": google})
+
+    if not campaign.queries:
+        typer.echo(f"Profile '{campaign.name}' has no queries. Add some in the GUI ('formharvester gui').")
+        raise typer.Exit(code=1)
+
+    bot = Bot(settings, campaign)
+    try:
+        remaining_google = [i[0] for i in bot.get_no_progress(is_google=True)]
+        remaining_urls = [i[0] for i in bot.get_no_progress()]
+        if remaining_urls or remaining_google:
+            bot.resume(remaining_urls, remaining_google)
+        else:
+            bot.run()
+    finally:
+        bot.close()
+
+
+@cli.command()
+def gui() -> None:
+    """Open the desktop interface."""
+    from formharvester.gui import launch
+
+    launch()
+
+
+settings_app = typer.Typer(help="Inspect and change saved settings.", no_args_is_help=True)
+profile_app = typer.Typer(help="Manage campaign profiles.", no_args_is_help=True)
+cli.add_typer(settings_app, name="settings")
+cli.add_typer(profile_app, name="profile")
+
+
+@settings_app.command("show")
+def settings_show() -> None:
+    """Print the current settings as JSON."""
+    typer.echo(load_settings().model_dump_json(indent=2))
+
+
+@settings_app.command("path")
+def settings_path() -> None:
+    """Print where settings and profiles are stored."""
+    typer.echo(str(config_home()))
+
+
+@settings_app.command("set")
+def settings_set(
+    key: Annotated[str, typer.Argument(help="Dotted key, e.g. engine.headless or google.max_pages.")],
+    value: Annotated[str, typer.Argument(help="New value.")],
+) -> None:
+    """Set one setting, e.g. 'formharvester settings set engine.headless true'."""
+    settings = load_settings()
+    section, _, field = key.partition(".")
+    if not field or not hasattr(settings, section):
+        typer.echo(f"Unknown key '{key}'. Use one of: engine.*, google.*, captcha.*")
+        raise typer.Exit(code=1)
+
+    if not hasattr(getattr(settings, section), field):
+        typer.echo(f"Unknown key '{key}'.")
+        raise typer.Exit(code=1)
+
+    # Re-validate the whole dict so pydantic coerces the string into the
+    # field's real type; model_copy would skip validation and store the string.
+    data = settings.model_dump()
+    data[section][field] = value
+    try:
+        updated = Settings.model_validate(data)
+    except ValidationError as exc:
+        typer.echo(f"Invalid value for {key}: {exc.errors()[0]['msg']}")
+        raise typer.Exit(code=1) from None
+
+    save_settings(updated)
+    typer.echo(f"{key} = {getattr(getattr(updated, section), field)}")
+
+
+@profile_app.command("list")
+def profile_list() -> None:
+    """List saved campaign profiles."""
+    active = load_settings().active_profile
+    names = list_profiles()
+    if not names:
+        typer.echo("No profiles yet.")
+        return
+    for name in names:
+        typer.echo(f"{'*' if name == active else ' '} {name}")
+
+
+@profile_app.command("show")
+def profile_show(name: Annotated[str | None, typer.Argument()] = None) -> None:
+    """Print a campaign profile as JSON."""
+    settings = load_settings()
+    typer.echo(load_profile(name or settings.active_profile).model_dump_json(indent=2))
+
+
+@profile_app.command("create")
+def profile_create(name: Annotated[str, typer.Argument(help="Profile name.")]) -> None:
+    """Create an empty campaign profile."""
+    path = save_profile(CampaignProfile(name=name))
+    typer.echo(f"Created {path}")
+
+
+@profile_app.command("use")
+def profile_use(name: Annotated[str, typer.Argument(help="Profile to make active.")]) -> None:
+    """Set the profile used when --profile is omitted."""
+    if name not in list_profiles():
+        typer.echo(f"No profile named '{name}'.")
+        raise typer.Exit(code=1)
+    settings = load_settings()
+    save_settings(settings.model_copy(update={"active_profile": name}))
+    typer.echo(f"Active profile: {name}")
+
+
+@cli.command()
+def version() -> None:
+    """Print the FormHarvester version."""
+    typer.echo(__VERSION__)
 
 
 def main() -> None:
-    """Run the config-driven harvest loop (reads ``config.txt``)."""
-    while True:
-        bot = Bot()
-        try:
-            remaining_google = bot.get_no_progress(is_google=True)
-            remaining_urls = bot.get_no_progress()
-            if remaining_urls or remaining_google:
-                urls = [i[0] for i in remaining_urls]
-                googles = [i[0] for i in remaining_google]
-                bot.resume(urls, googles)
-            else:
-                bot.bot_print("Done!", is_input=True)
-        except Exception as e:
-            bot.close()
-            print(e)
+    cli()
 
 
 if __name__ == "__main__":
