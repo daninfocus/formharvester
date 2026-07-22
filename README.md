@@ -1,5 +1,8 @@
 ![formharvester](docs/logo.jpeg)
 
+[![PyPI](https://img.shields.io/pypi/v/formharvester.svg?logo=pypi&logoColor=white&color=3775A9)](https://pypi.org/project/formharvester/)
+[![Latest release (Windows)](https://custom-icon-badges.demolab.com/github/v/release/dariomory/formharvester?label=Windows%20exe&logo=windows11&logoColor=white&color=0078D6)](https://github.com/dariomory/formharvester/releases/latest/download/formharvester.exe)
+
 **Website:** [formharvester.com](https://formharvester.com)
 
 FormHarvester is an AI-assisted form intelligence engine.
