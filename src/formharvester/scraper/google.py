@@ -147,7 +147,7 @@ class GoogleSearchMixin(_Base):
 
     def filter_links(self, scraped_links):
         scraped_links = [get_root_url(i) for i in scraped_links]  # map by root url
-        scraped_links = list(set(scraped_links))  # duplicate filter
+        scraped_links = list(dict.fromkeys(scraped_links))  # de-duplicate, keeping result order
         scraped_links = filter_scraped_links(self.keywords, scraped_links)  # keyword filter
         website_log = self.get_website_log()
         scraped_links = [i for i in scraped_links if i not in website_log]  # filter by global log

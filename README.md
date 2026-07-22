@@ -98,7 +98,8 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
     result = fh.harvest("https://acme.com")
     print(result.status, result.submitted, result.emails)
 
-    for r in fh.harvest_many(["https://a.com", "https://b.com"]):
+    urls = fh.discover("roofing companies austin")   # Google search -> site URLs
+    for r in fh.harvest_many(urls):
         print(r.url, r.status)
 ```
 
@@ -107,7 +108,10 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
 One-shot helpers `harvest_site(url, details)` and `harvest_sites(urls, details)`
 are also available.
 
-## Package layout (2.4.0)
+`discover()` raises `GoogleCaptchaError` rather than blocking; set
+`HarvesterOptions.google_captcha_sleep` to wait it out instead.
+
+## Package layout (2.4.1)
 
 ```
 src/formharvester/
