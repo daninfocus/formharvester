@@ -6,9 +6,9 @@ Public API:
 """
 
 from formharvester.api import (
+    CaptchaError,
     FormFillDetails,
     FormHarvester,
-    GoogleCaptchaError,
     HarvesterOptions,
     HarvestResult,
     HarvestStatus,
@@ -23,7 +23,7 @@ __version__ = __VERSION__
 __all__ = [
     "FormFillDetails",
     "FormHarvester",
-    "GoogleCaptchaError",
+    "CaptchaError",
     "HarvestResult",
     "HarvestStatus",
     "HarvesterOptions",

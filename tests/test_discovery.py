@@ -1,4 +1,4 @@
-"""Library-side Google discovery (``FormHarvester.discover``).
+"""Library-side search discovery (``FormHarvester.discover``).
 
 The browser is never started here: these tests drive the real
 ``GoogleSearchMixin`` logic against a stubbed Selenium surface, so the thing
@@ -13,9 +13,9 @@ from typing import Any, cast
 import pytest
 
 from formharvester.api import (
+    CaptchaError,
     FormFillDetails,
     FormHarvester,
-    GoogleCaptchaError,
     HarvesterOptions,
     _InMemoryProgress,
 )
@@ -38,7 +38,7 @@ class _FakeSwitchTo:
 
 
 class _FakeDriver:
-    """Only what the Google flow reaches for directly, outside css()/xpath()."""
+    """Only what the search flow reaches for directly, outside css()/xpath()."""
 
     switch_to = _FakeSwitchTo()
 
@@ -59,7 +59,7 @@ class _StubHarvester(FormHarvester):
         self.MIN_DELAY = opts.min_delay
         self.MAX_DELAY = opts.max_delay
         self.GOOGLE_TIMER = opts.search_timer
-        self.CAPTCHA_SLEEP = opts.google_captcha_sleep
+        self.CAPTCHA_SLEEP = opts.captcha_sleep
         self.keywords = list(opts.keywords)
         self.google_term = None
         self.google_query = None
@@ -119,7 +119,7 @@ def test_discover_many_preserves_order_and_drops_repeats():
 def test_captcha_raises_instead_of_blocking():
     bot = _StubHarvester()
     bot.captcha = True
-    with pytest.raises(GoogleCaptchaError, match="google_captcha_sleep"):
+    with pytest.raises(CaptchaError, match="captcha_sleep"):
         bot.discover("roofing")
 
 

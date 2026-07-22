@@ -17,6 +17,8 @@ else:
 
 
 class GoogleSearchMixin(_Base):
+    SEARCH_URL = "https://www.google.com/search?q={query}&filter=0"
+
     # CSS
     GOOGLE_LINKS = '//*[@id="search"]//a[@data-ved and contains(@href, "http")]'  # xpath
     GOOGLE_LINKS_ADS = '//*[@id="search"]//a[@data-ved and contains(@href, "http")] | //a[@data-pcu]'  # xpath
@@ -55,7 +57,7 @@ class GoogleSearchMixin(_Base):
                     time.sleep(time_in_seconds)
                     self.create_driver()
                     self.wait_google_timer()
-                    self.get(f"https://www.google.com/search?q={self.google_query}&filter=0")
+                    self.get(self.SEARCH_URL.format(query=self.google_query))
                     if self.current_page:
                         self.start_at_x_page(self.current_page)
                 else:
@@ -128,7 +130,7 @@ class GoogleSearchMixin(_Base):
 
         self.google_query = quote_plus(self.google_term)
         time.sleep(3)
-        self.get(f"https://www.google.com/search?q={self.google_query}&filter=0")
+        self.get(self.SEARCH_URL.format(query=self.google_query))
 
         self.check_google_captcha()
         self.google_popup_check()

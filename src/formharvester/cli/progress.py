@@ -52,7 +52,6 @@ class ProgressMixin(_Base):
                 f.write(url + "|\n")
 
     def update_progress(self, term, status, google):
-
         filename = self.get_progress_file(google)
         progress = self.load_progress(google=google)
         progress = self.filter_unique(progress)

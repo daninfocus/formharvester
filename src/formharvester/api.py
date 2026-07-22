@@ -32,7 +32,7 @@ from formharvester.scraper import GoogleSearchMixin
 __all__ = [
     "FormFillDetails",
     "FormHarvester",
-    "GoogleCaptchaError",
+    "CaptchaError",
     "HarvestResult",
     "HarvestStatus",
     "HarvesterOptions",
@@ -42,8 +42,8 @@ __all__ = [
 ]
 
 
-class GoogleCaptchaError(RuntimeError):
-    """Google served a captcha and no wait was configured to sit it out."""
+class CaptchaError(RuntimeError):
+    """The search engine served a captcha and no wait was configured to sit it out."""
 
 
 # The per-site outcomes the engine can report - the same tokens the CLI writes.
@@ -108,7 +108,7 @@ class HarvesterOptions:
     min_delay: int = 8
     max_delay: int = 25
     search_timer: int = 0
-    google_captcha_sleep: int = 0
+    captcha_sleep: int = 0
     keywords: list[str] = field(default_factory=list)
 
     def resolve_solver(self) -> CaptchaSolver | None:
@@ -199,7 +199,7 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
         self.MIN_DELAY = opts.min_delay
         self.MAX_DELAY = opts.max_delay
         self.GOOGLE_TIMER = opts.search_timer
-        self.CAPTCHA_SLEEP = opts.google_captcha_sleep
+        self.CAPTCHA_SLEEP = opts.captcha_sleep
         self.keywords = list(opts.keywords)
         self.google_term: str | None = None
         self.google_query: str | None = None
@@ -222,7 +222,7 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
         """Raise instead of blocking on the CLI's "solve it yourself" prompt.
 
         The CLI can sit and wait for a human; a library caller cannot. With
-        ``google_captcha_sleep`` set we still fall back to the shared wait-and-
+        ``captcha_sleep`` set we still fall back to the shared wait-and-
         retry behaviour.
         """
         if self.css('input[type="text"]'):
@@ -230,8 +230,8 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
         if self.CAPTCHA_SLEEP:
             super().check_google_captcha()
             return
-        raise GoogleCaptchaError(
-            "Google served a captcha. Set HarvesterOptions.google_captcha_sleep "
+        raise CaptchaError(
+            "The search engine served a captcha. Set HarvesterOptions.captcha_sleep "
             "to wait it out, or slow down with min_delay/max_delay/search_timer."
         )
 
@@ -248,7 +248,7 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
         max_pages: int | None = None,
         start_page: int | None = None,
     ) -> list[str]:
-        """Search Google for ``query`` and return the site root URLs it found.
+        """Search the web for ``query`` and return the site root URLs it found.
 
         Results are de-duplicated by root domain and filtered by
         ``HarvesterOptions.keywords`` when any are set. Feed them straight to
