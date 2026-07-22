@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FormHarvester</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <img class="logo" src="logo.png" alt="" width="155" height="169" />
+  <h1><span class="brand-f">F</span>ormHarvester</h1>
+  <span class="version" id="version"></span>
+  <div class="status">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">idle</span>
+  </div>
+</header>
+
+<nav>
+  <button data-panel="run" class="active">Run</button>
+  <button data-panel="campaign">Campaign</button>
+  <button data-panel="settings">Settings</button>
+</nav>
+
+<main>
+  <!-- Run -->
+  <section class="panel active" id="panel-run">
+    <fieldset>
+      <legend>Profile</legend>
+      <div class="grid">
+        <label>
+          Active campaign
+          <select id="profile-select"></select>
+        </label>
+        <label>
+          Create a new one
+          <div class="actions">
+            <input type="text" id="new-profile" placeholder="e.g. roofing" />
+            <button class="btn" id="btn-create">Add</button>
+          </div>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Console</legend>
+      <div class="actions" style="margin-bottom: 0.85rem;">
+        <button class="btn primary" id="btn-start">Start harvest</button>
+        <button class="btn" id="btn-stop" disabled>Stop</button>
+        <button class="btn" id="btn-clear">Clear</button>
+      </div>
+      <div id="console"><span class="empty">Idle. Press "Start harvest" to begin.</span></div>
+    </fieldset>
+  </section>
+
+  <!-- Campaign -->
+  <section class="panel" id="panel-campaign">
+    <fieldset>
+      <legend>Form details</legend>
+      <div class="grid">
+        <label>First name <input type="text" data-profile="form_fill.first_name" /></label>
+        <label>Last name <input type="text" data-profile="form_fill.last_name" /></label>
+        <label>Email <input type="text" data-profile="form_fill.email" /></label>
+        <label>Phone <input type="text" data-profile="form_fill.phone" /></label>
+        <label>Location <input type="text" data-profile="form_fill.location" /></label>
+        <label>City <input type="text" data-profile="form_fill.city" /></label>
+        <label>State <input type="text" data-profile="form_fill.state" /></label>
+        <label>Subject <input type="text" data-profile="form_fill.subject" /></label>
+      </div>
+      <label style="margin-top: 0.85rem;">
+        Message
+        <textarea data-profile="form_fill.message"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Search</legend>
+      <label>
+        Google queries <span class="hint">one per line</span>
+        <textarea data-profile-list="queries"></textarea>
+      </label>
+      <label style="margin-top: 0.85rem;">
+        Keywords <span class="hint">one per line, used to spot contact pages</span>
+        <textarea data-profile-list="keywords"></textarea>
+      </label>
+    </fieldset>
+
+    <div class="actions">
+      <button class="btn primary" id="btn-save-campaign">Save campaign</button>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section class="panel" id="panel-settings">
+    <fieldset>
+      <legend>Engine</legend>
+      <div class="grid">
+        <label class="check"><input type="checkbox" data-setting="engine.send_form" /> Submit forms</label>
+        <label class="check"><input type="checkbox" data-setting="engine.headless" /> Hide browser</label>
+        <label class="check"><input type="checkbox" data-setting="engine.skip_ads" /> Skip Google ads</label>
+        <label class="check"><input type="checkbox" data-setting="engine.generate_email_sources" /> Log email sources</label>
+        <label class="check"><input type="checkbox" data-setting="engine.debug_form" /> Debug: fill but never submit</label>
+        <label>
+          Seconds per site
+          <input type="number" min="1" data-setting="engine.max_time" />
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Google</legend>
+      <div class="grid">
+        <label>Start page <input type="number" min="1" data-setting="google.start_page" /></label>
+        <label>Max pages per query <input type="number" min="1" data-setting="google.max_pages" /></label>
+        <label>Min delay <span class="hint">seconds</span><input type="number" min="0" data-setting="google.min_delay" /></label>
+        <label>Max delay <span class="hint">seconds</span><input type="number" min="0" data-setting="google.max_delay" /></label>
+        <label>Captcha pause <span class="hint">minutes, 0 disables</span><input type="number" min="0" data-setting="google.captcha_sleep" /></label>
+        <label>Between batches <span class="hint">minutes</span><input type="number" min="0" data-setting="google.search_timer" /></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Captcha solver</legend>
+      <div class="grid">
+        <label>
+          Provider
+          <select data-setting="captcha.provider">
+            <option value="">auto-detect</option>
+            <option value="2captcha">2captcha</option>
+            <option value="deathbycaptcha">deathbycaptcha</option>
+            <option value="none">none</option>
+          </select>
+        </label>
+        <label>2captcha API key <input type="password" data-setting="captcha.twocaptcha_api_key" /></label>
+        <label>DBC username <input type="text" data-setting="captcha.dbc_username" /></label>
+        <label>DBC password <input type="password" data-setting="captcha.dbc_password" /></label>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button class="btn primary" id="btn-save-settings">Save settings</button>
+    </div>
+  </section>
+</main>
+
+<footer id="home-path"></footer>
+<div id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
