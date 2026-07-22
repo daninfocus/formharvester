@@ -1,5 +1,7 @@
 ![formharvester](docs/logo.jpeg)
 
+**Website:** [formharvester.com](https://formharvester.com)
+
 FormHarvester is an AI-assisted form intelligence engine.
 It navigates the open web autonomously - executing searches, parsing page structure, extracting contact signals, and interacting with forms at the browser level. Built on async browser with stealth fingerprinting, proxy rotation, and a pluggable captcha solver interface.
 
@@ -56,7 +58,8 @@ Disable in production. They are used for development reasons. `debug_form` may b
 
 ## How to run
 #### Executable
-`Run formharvester.exe`
+[Download formharvester.exe](https://github.com/dariomory/formharvester/releases/latest/download/formharvester.exe)
+(built automatically on every release by `.github/workflows/release-windows-exe.yml`), then run it.
 
 #### Python
 ```bash
@@ -104,6 +107,18 @@ src/formharvester/
 ├── captcha/             # solver providers (DeathByCaptcha, 2captcha) + detection
 ├── cli/                 # config.txt loader + run loop (`formharvester` command)
 └── utils/               # root-domain, email regex, link filters
+```
+
+## Building the Windows executable (maintainers)
+
+`.github/workflows/release-windows-exe.yml` builds `formharvester.exe` with PyInstaller and
+attaches it to the GitHub Release for any pushed `v*` tag (also runnable manually via
+workflow_dispatch). To build it locally:
+
+```bash
+uv sync --no-group dev
+uv pip install pyinstaller
+uv run pyinstaller --onefile --console --name formharvester packaging/windows_entry.py
 ```
 
 ## Folder structure (runtime)
