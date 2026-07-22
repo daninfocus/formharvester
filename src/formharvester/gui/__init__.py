@@ -9,8 +9,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from formharvester.settings import migrate_legacy_config
-
 __all__ = ["launch"]
 
 WEB_ROOT = Path(__file__).parent / "web"
@@ -28,8 +26,6 @@ def launch(on_ready: Callable[[], None] | None = None) -> None:
         raise SystemExit("The GUI needs pywebview. Install it with:\n\n    pip install 'formharvester[gui]'\n") from exc
 
     from formharvester.gui.api import Api
-
-    migrate_legacy_config()
 
     webview.create_window(
         "FormHarvester",

@@ -77,7 +77,7 @@ class FormFillDetails:
 
 @dataclass
 class HarvesterOptions:
-    """Engine options (maps to the CLI's ``config.txt`` settings).
+    """Engine options (maps to the CLI's saved settings).
 
     Provide either a ready ``captcha_solver`` or provider credentials
     (``captcha_provider`` + creds), which are turned into a solver for you.
