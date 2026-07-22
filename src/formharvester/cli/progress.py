@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from formharvester.utils import get_root_url
@@ -17,18 +18,23 @@ else:
 class ProgressMixin(_Base):
     @staticmethod
     def load_txt(filename):
-        if not os.path.exists(filename):
-            open(filename, "w").close()
+        path = Path(filename)
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
             return []
 
-        with open(filename) as f:
+        with path.open() as f:
             return [i.strip() for i in f.readlines() if i.strip()]
 
+    def _data_file(self, name):
+        """Path inside the data directory, which is created on first use."""
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        return self.data_dir / name
+
     def get_progress_file(self, google):
-        if google:
-            return f"data/{self.mode}_progress_google.txt"
-        else:
-            return f"data/{self.mode}_progress.txt"
+        suffix = "_progress_google.txt" if google else "_progress.txt"
+        return str(self._data_file(f"{self.mode}{suffix}"))
 
     def load_progress(self, google):
         filename = self.get_progress_file(google)
@@ -84,13 +90,17 @@ class ProgressMixin(_Base):
         terms = [i[0] for i in progress]
         return [i for i in term_list if i not in terms]
 
+    @property
+    def remaining_pages_file(self):
+        return self._data_file("remaining_google_pages.json")
+
     def log_remaining_pages(self):
-        with open("remaining_google_pages.json", "w") as f:
+        with open(self.remaining_pages_file, "w") as f:
             json.dump(self.remaining_pages_log, f)
 
     def get_remaining_pages(self):
-        if os.path.exists("remaining_google_pages.json"):
-            with open("remaining_google_pages.json") as f:
+        if os.path.exists(self.remaining_pages_file):
+            with open(self.remaining_pages_file) as f:
                 self.remaining_pages_log = json.load(f)
 
     def get_no_progress(self, is_google=False):
@@ -105,20 +115,25 @@ class ProgressMixin(_Base):
                 output.append(arr)
         return output
 
+    @property
+    def website_log_file(self):
+        return self._data_file("website_log.txt")
+
     def log_website(self, url):
         url = get_root_url(url)
         self.visited_websites.append(url)
-        with open("data/website_log.txt", "a") as f:
+        with open(self.website_log_file, "a") as f:
             f.write(url + "\n")
 
     def get_website_log(self):
-        return self.load_txt("data/website_log.txt")
+        return self.load_txt(self.website_log_file)
 
     def export_emails(self, filename="scraped_emails"):
-        existing_emails = self.load_txt(f"data/{filename}_emails.txt")
+        emails_file = self._data_file(f"{filename}_emails.txt")
+        existing_emails = self.load_txt(emails_file)
 
         logged = set()
-        with open(f"data/{filename}_emails.txt", "a") as f:
+        with open(emails_file, "a") as f:
             for email, url in self.scraped_emails:
                 if email not in existing_emails and email not in logged:
                     f.write(email + "\n")
@@ -126,7 +141,7 @@ class ProgressMixin(_Base):
 
         if self.generate_email_sources:
             logged = set()
-            with open(f"data/{filename}_emails_sources.txt", "a") as f:
+            with open(self._data_file(f"{filename}_emails_sources.txt"), "a") as f:
                 for email, url in self.scraped_emails:
                     if email not in existing_emails:
                         f.write(f"{email} ({url})" + "\n")

@@ -5,73 +5,82 @@
 FormHarvester is an AI-assisted form intelligence engine.
 It navigates the open web autonomously - executing searches, parsing page structure, extracting contact signals, and interacting with forms at the browser level. Built on async browser with stealth fingerprinting, proxy rotation, and a pluggable captcha solver interface.
 
-## Adjusting config.txt
-
-#### `mode`
-The CSV that will be used by the bot (e.g. `mode = lawn` will use `lawn.csv`)
-
-#### `max_google_pages`
-The CSV that will be used by the bot (e.g. `mode = lawn` will use `lawn.csv`)
-
-#### `skip_ads`
-FormHarvester will skip any ads on Google Search.
-
-#### `start_page`
-FormHarvester will start on X google page.
-
-#### `send_form`
-FormHarvester will send the form inside the website. It can be disabled to save time.
-
-#### `generate_email_sources`
-Generate an extra file showing the source URL where the email was extracted.
-
-#### `hide_browser`
-This setting will run the browser in headless mode and it will be hidden.
-
-#### `max_time`
-Max time FormHarvester can spend on a single website.
-
-#### `min_delay` and `max_delay`
-A random delay between `min` and `max` will be used for google.
-
-#### `captcha_sleep`
-Sleep for `X` minutes after a Google captcha is found. 0 to disable.
-
-#### `search_timer`
-A waiting time (in minutes) between the last google search and the next one.
-
-#### `[captcha]`
-Configure an automatic captcha solver. Set `provider` to `deathbycaptcha`,
-`2captcha`, or `none` (blank auto-detects from whichever credentials you fill in):
-
-```ini
-[captcha]
-provider = 2captcha
-dbc_username =
-dbc_password =
-twocaptcha_api_key = your_2captcha_key
-```
-
-#### `[dev]`
-Disable in production. They are used for development reasons. `debug_form` may be useful, as it prevents the form from submitting.
-
+![The FormHarvester desktop app](docs/screenshot-gui.png)
 
 ## How to run
-#### Executable
+
+#### Desktop app
 [Download formharvester.exe](https://github.com/dariomory/formharvester/releases/latest/download/formharvester.exe)
 (built automatically on every release by `.github/workflows/release-windows-exe.yml`), then run it.
+Everything is configured in the app: no files to edit.
 
 #### Python
 ```bash
-pip install -e .
-formharvester          # runs the config-driven harvest loop (reads config.txt)
+pip install "formharvester[gui]"
+formharvester gui      # desktop app
+formharvester run      # headless harvest loop
 ```
+
+The `[gui]` extra pulls in pywebview. Plain `pip install formharvester` gives
+you the CLI and the library without it.
+
+## Configuration
+
+Settings live in `formharvester.json`, and each campaign (form-fill details plus
+the search queries) lives in `profiles/<name>.json`. Run
+`formharvester settings path` to see where they are stored. The location is the
+working directory when a config already exists there, otherwise
+`~/.formharvester`; `FORMHARVESTER_HOME` overrides both.
+
+Scraped emails, progress files and error logs are written to `data/` and
+`log/` inside that same directory.
+
+### From the GUI
+
+`formharvester gui` opens three tabs: **Run** picks the active campaign and
+streams the live console, **Campaign** edits the form-fill details and query
+list, **Settings** covers the engine, Google pacing and the captcha solver.
+
+### From the CLI
+
+```bash
+formharvester settings show                     # print current settings
+formharvester settings set engine.headless true # values are validated
+formharvester settings set google.max_pages 5
+
+formharvester profile list
+formharvester profile create solar
+formharvester profile use solar
+
+formharvester run --profile solar --headless --max-pages 5
+```
+
+Flags on `run` override the saved settings for that run only.
+
+### Settings reference
+
+| Key | Meaning |
+| --- | --- |
+| `engine.send_form` | Submit the contact form once filled. Disable to save time. |
+| `engine.headless` | Run the browser hidden. |
+| `engine.skip_ads` | Skip ad results on Google Search. |
+| `engine.max_time` | Seconds allowed per website. |
+| `engine.generate_email_sources` | Also record the URL each email came from. |
+| `engine.debug_form` | Fill forms but never submit them. |
+| `google.start_page` | Google results page to start from. |
+| `google.max_pages` | Result pages to walk per query. |
+| `google.min_delay` / `google.max_delay` | Random delay range, in seconds, between searches. |
+| `google.captcha_sleep` | Minutes to pause after a Google captcha. 0 disables. |
+| `google.search_timer` | Minutes between search batches. |
+| `captcha.provider` | `deathbycaptcha`, `2captcha`, `none`, or blank to auto-detect from the credentials you filled in. |
+| `captcha.twocaptcha_api_key` | 2captcha API key. |
+| `captcha.dbc_username` / `captcha.dbc_password` | DeathByCaptcha credentials. |
 
 ## Programmatic use (library API)
 
-Since `2.3.0` FormHarvester ships a library API so you can drive the engine from
-your own code - no `config.txt`, input CSV or progress files required. The CLI
-is unchanged.
+Since `2.4.0` FormHarvester ships a library API so you can drive the engine from
+your own code - no settings files or progress files required. The CLI is
+unchanged.
 
 ```python
 from formharvester import FormHarvester, FormFillDetails, HarvesterOptions
@@ -95,7 +104,7 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
 One-shot helpers `harvest_site(url, details)` and `harvest_sites(urls, details)`
 are also available.
 
-## Package layout (2.3.0)
+## Package layout (2.4.0)
 
 ```
 src/formharvester/
@@ -105,7 +114,9 @@ src/formharvester/
 ├── scraper/             # Google search + email scraping
 ├── form_handler/        # contact-page discovery, field fill, submit
 ├── captcha/             # solver providers (DeathByCaptcha, 2captcha) + detection
-├── cli/                 # config.txt loader + run loop (`formharvester` command)
+├── settings.py          # JSON settings, profiles and file locations
+├── cli/                 # typer commands (`formharvester`)
+├── gui/                 # pywebview desktop app (web/ holds its HTML, CSS, JS)
 └── utils/               # root-domain, email regex, link filters
 ```
 
@@ -116,24 +127,13 @@ attaches it to the GitHub Release for any pushed `v*` tag (also runnable manuall
 workflow_dispatch). To build it locally:
 
 ```bash
-uv sync --no-group dev
+uv sync --no-group dev --extra gui
 uv pip install pyinstaller
-uv run pyinstaller --onefile --console --name formharvester packaging/windows_entry.py
+uv run pyinstaller packaging/formharvester.spec
 ```
 
-## Folder structure (runtime)
-
-#### data
-Where scraped emails and logs are dumped.
-
-#### drivers
-Browser drivers used by selenium.
-
-#### input
-Input CSV files go here.
-
-#### log
-This folder will report errors on websites, very useful to improve the bot.
+The executable launches the desktop app. The `formharvester` command installed
+by pip is the CLI.
 
 ___
 

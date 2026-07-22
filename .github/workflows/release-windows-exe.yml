@@ -27,11 +27,13 @@ jobs:
 
       - name: Install project and PyInstaller
         run: |
-          uv sync --no-group dev
+          uv sync --no-group dev --extra gui
           uv pip install pyinstaller
 
+      # Build options live in the spec file, not here: the splash screen needs
+      # settings the CLI does not expose.
       - name: Build executable
-        run: uv run pyinstaller --onefile --console --name formharvester packaging/windows_entry.py
+        run: uv run pyinstaller packaging/formharvester.spec
 
       - name: Upload build artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
