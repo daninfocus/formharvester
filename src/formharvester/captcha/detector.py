@@ -8,43 +8,45 @@ engine so it can use the driver primitives (``css``/``xpath``/``script``).
 from __future__ import annotations
 
 import html
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urljoin, urlparse
 
 import requests
 
 from formharvester.captcha.base import CaptchaSolver
 
+if TYPE_CHECKING:
+    from formharvester._typing import EngineProtocol as _Base
+else:
+    _Base = object
 
-class CaptchaMixin:
+
+class CaptchaMixin(_Base):
     # Set by the composed engine; ``None`` disables captcha solving.
     captcha_solver: CaptchaSolver | None = None
 
     def check_captcha(self, recaptcha: bool = False, image: bool = False) -> str | None:
         """Return a reCAPTCHA site-key or an image-captcha URL if present."""
         if image:
-            src = self.xpath(  # type: ignore[attr-defined]
+            src = self.xpath(
                 '//img[contains(@class, "captcha") or contains(@src, "captcha")]',
                 attr="src",
             )
             if src:
-                return urljoin(self.driver.current_url, src)  # type: ignore[attr-defined]
+                return urljoin(self.driver.current_url, src)
 
         if recaptcha:
-            site_key = self.css(".g-recaptcha", attr="data-sitekey")  # type: ignore[attr-defined]
+            site_key = self.css(".g-recaptcha", attr="data-sitekey")
             if site_key:
                 return site_key
 
-            site_key = self.xpath(  # type: ignore[attr-defined]
-                '//*[contains(@class, "recaptcha") and @data-sitekey]', attr="data-sitekey"
-            )
+            site_key = self.xpath('//*[contains(@class, "recaptcha") and @data-sitekey]', attr="data-sitekey")
             if site_key:
                 return site_key
 
-            src = self.css(".grecaptcha-logo>iframe", attr="src")  # type: ignore[attr-defined]
+            src = self.css(".grecaptcha-logo>iframe", attr="src")
             if not src:
-                src = self.xpath(  # type: ignore[attr-defined]
-                    '//iframe[contains(@src, "recaptcha") and contains(@src, "k=")]', attr="src"
-                )
+                src = self.xpath('//iframe[contains(@src, "recaptcha") and contains(@src, "k=")]', attr="src")
             if src:
                 src = html.unescape(src)
                 keys = parse_qs(urlparse(src).query).get("k")
@@ -53,13 +55,11 @@ class CaptchaMixin:
         return None
 
     def _inject_recaptcha_token(self, token: str) -> None:
-        target = self.css("#g-recaptcha-response")  # type: ignore[attr-defined]
+        target = self.css("#g-recaptcha-response")
         if not target:
-            target = self.xpath(  # type: ignore[attr-defined]
-                '//textarea[contains(@id, "recaptcha") or contains(@name, "captcha")]'
-            )
+            target = self.xpath('//textarea[contains(@id, "recaptcha") or contains(@name, "captcha")]')
         if target:
-            self.script("arguments[0].innerHTML = arguments[1];", target, token)  # type: ignore[attr-defined]
+            self.script("arguments[0].innerHTML = arguments[1];", target, token)
 
     def check_solve_captchas(self, recaptcha: bool = False, image: bool = False) -> str | bool | None:
         """Detect and solve a captcha. Returns the text (image) or True (reCAPTCHA)."""
@@ -71,7 +71,8 @@ class CaptchaMixin:
             if not site_key:
                 return None
             token = self.captcha_solver.solve_recaptcha(
-                site_key, self.driver.current_url  # type: ignore[attr-defined]
+                site_key,
+                self.driver.current_url,
             )
             if token:
                 self._inject_recaptcha_token(token)

@@ -3,19 +3,26 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from formharvester.utils import EMAIL_RGX
 
+if TYPE_CHECKING:
+    from formharvester._typing import EngineProtocol as _Base
+else:
+    _Base = object
 
-class EmailScraperMixin:
+
+class EmailScraperMixin(_Base):
     def scrape_emails(self):
         emails = set(re.findall(EMAIL_RGX, str(self.driver.page_source).lower()))
         emails = [
-            i for i in emails if
-            not any(
-                x for x in
-                ['.svg', '.png', '.jpg', '/', 'unpkg', 'sentry.wixpress.com', 'static.', 'indexOf', '.js'] if
-                x in i
+            i
+            for i in emails
+            if not any(
+                x
+                for x in [".svg", ".png", ".jpg", "/", "unpkg", "sentry.wixpress.com", "static.", "indexOf", ".js"]
+                if x in i
             )
         ]
         if emails:

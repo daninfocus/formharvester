@@ -16,14 +16,14 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     BASE_DIR = os.path.dirname(sys.executable)
 elif __file__:
     BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class SeleniumBot:
-    driver = None
+    _driver: webdriver.Chrome | None = None
 
     DEV_SETTINGS = None
     COOKIES_PROFILE = None
@@ -55,6 +55,19 @@ class SeleniumBot:
     NUM_MOUSE_MOVES = 10
 
     crawl = True
+
+    @property
+    def driver(self) -> webdriver.Chrome:
+        """The active Chrome session. Call ``create_driver()``/``spawn_driver()`` first."""
+        assert self._driver is not None, "driver not created yet - call create_driver() first"
+        return self._driver
+
+    @driver.setter
+    def driver(self, value: webdriver.Chrome | None) -> None:
+        self._driver = value
+
+    def save_cookies(self) -> None:
+        """No-op: cookie persistence was never implemented upstream."""
 
     def get(self, page, pre_sleep=0, sleep=0, timeout=False, check=False):
 
@@ -101,9 +114,15 @@ class SeleniumBot:
     def script(self, script, *args):
         return self.driver.execute_script(script, *args)
 
-    def css(self, selector, node=None, getall=False, attr=None,
-            wait=None, wait_for=None,
-            ):
+    def css(
+        self,
+        selector,
+        node=None,
+        getall=False,
+        attr=None,
+        wait=None,
+        wait_for=None,
+    ):
 
         if wait:
             w = self.wait_show_element(selector, wait=wait)
@@ -144,12 +163,12 @@ class SeleniumBot:
         if type(attr) == list:
             output = []
             for a in attr:
-                if a == 'text':
+                if a == "text":
                     output.append(el.text)
                 else:
                     output.append(el.get_attribute(a))
         else:
-            if attr == 'text':
+            if attr == "text":
                 output = el.text
             else:
                 output = el.get_attribute(attr)
@@ -168,8 +187,8 @@ class SeleniumBot:
             return None
 
     def contains_regex(self, regex):
-        page_text = self.css('body').text
-        if re.findall(rf'{regex}', page_text):
+        page_text = self.css("body").text
+        if re.findall(rf"{regex}", page_text):
             return True
         else:
             return False
@@ -183,10 +202,9 @@ class SeleniumBot:
 
     def wait_page_load(self):
         while True:
-            page_state = self.script(
-                'return document.readyState;')
+            page_state = self.script("return document.readyState;")
             self.driver.implicitly_wait(1)
-            if page_state == 'complete':
+            if page_state == "complete":
                 break
         return
 
@@ -202,7 +220,7 @@ class SeleniumBot:
         while True:
             if self.contains_regex(regex):
                 return True
-            time.sleep(.5)
+            time.sleep(0.5)
 
     def wait_for_element(self, selector, xpath=False, wait=99999):
         try:
@@ -251,7 +269,7 @@ class SeleniumBot:
 
     def verify_element_present(self, selector):
         if not self.element_is_present(selector):
-            raise Exception('Element %s not found' % selector)
+            raise Exception("Element %s not found" % selector)
 
     def get_element_from(self, fromObject, selector, xpath=False):
         try:
@@ -296,27 +314,30 @@ class SeleniumBot:
         return None
 
     def get_parent_levels(self, node, levels):
-        path = '..'
+        path = ".."
         if levels > 1:
             for i in range(1, levels):
-                path = path + '/..'
+                path = path + "/.."
         return node.find_element(By.XPATH, path)
 
     def get_parent_node(self, node):
-        return node.find_element(By.XPATH, '..')
+        return node.find_element(By.XPATH, "..")
 
     def get_child_nodes(self, node):
-        return node.find_elements(By.XPATH, './*')
+        return node.find_elements(By.XPATH, "./*")
 
-    def write(self, field, text,
-              css=False,
-              xpath=False,
-              name=False,
-              wait=False,
-              clear=False,
-              human=False,
-              submit=False,
-              ):
+    def write(
+        self,
+        field,
+        text,
+        css=False,
+        xpath=False,
+        name=False,
+        wait=False,
+        clear=False,
+        human=False,
+        submit=False,
+    ):
 
         if wait:
             self.wait_show_element(field, wait=self.WAIT, xpath=xpath)
@@ -330,9 +351,9 @@ class SeleniumBot:
 
         if clear:
             if human:
-                while field.get_attribute('value') != '':
+                while field.get_attribute("value") != "":
                     field.send_keys(Keys.BACKSPACE)
-                    time.sleep(random.uniform(.05, .1))
+                    time.sleep(random.uniform(0.05, 0.1))
                 self.random_sleep()
             else:
                 field.clear()
@@ -340,7 +361,7 @@ class SeleniumBot:
         if human:
             for letter in text:
                 field.send_keys(letter)
-                time.sleep(random.uniform(.05, .2))
+                time.sleep(random.uniform(0.05, 0.2))
         else:
             field.send_keys(text)
 
@@ -359,14 +380,7 @@ class SeleniumBot:
         field_object.send_keys(Keys.RETURN)
         return field_object
 
-    def click(self,
-              element,
-              wait=False,
-              css=False,
-              xpath=False,
-              js_click=False,
-              sleep=False,
-              double=False):
+    def click(self, element, wait=False, css=False, xpath=False, js_click=False, sleep=False, double=False):
 
         if wait:
             w = self.wait_show_element(element, wait=wait, xpath=xpath)
@@ -396,10 +410,12 @@ class SeleniumBot:
                 return element
             except:
                 try:
-                    script = ("var viewPortHeight = Math.max("
-                              "document.documentElement.clientHeight, window.innerHeight || 0);"
-                              "var elementTop = arguments[0].getBoundingClientRect().top;"
-                              "window.scrollBy(0, elementTop-(viewPortHeight/2));")
+                    script = (
+                        "var viewPortHeight = Math.max("
+                        "document.documentElement.clientHeight, window.innerHeight || 0);"
+                        "var elementTop = arguments[0].getBoundingClientRect().top;"
+                        "window.scrollBy(0, elementTop-(viewPortHeight/2));"
+                    )
                     self.driver.execute_script(script)  # parent = the webdriver
                     element.click()
                 except:
@@ -412,24 +428,24 @@ class SeleniumBot:
         found_checkbox = False
         checkboxes = self.css(selector, getall=True)
         for checkbox in checkboxes:
-            if checkbox.get_attribute('name') == name:
+            if checkbox.get_attribute("name") == name:
                 found_checkbox = True
                 if not deselect and not checkbox.is_selected():
                     checkbox.click()
                 if deselect and checkbox.is_selected():
                     checkbox.click()
         if not found_checkbox:
-            raise Exception('Checkbox %s not found.' % name)
+            raise Exception("Checkbox %s not found." % name)
 
     def select_option(self, selector, value):
         found_option = False
         options = self.css(selector, getall=True)
         for option in options:
-            if option.get_attribute('value') == str(value):
+            if option.get_attribute("value") == str(value):
                 found_option = True
                 option.click()
         if not found_option:
-            raise Exception('Option %s not found' % (value))
+            raise Exception("Option %s not found" % (value))
 
     def select_dropdown(self, value, xpath=False):
         if xpath:
@@ -442,13 +458,13 @@ class SeleniumBot:
         options = self.css(selector)
         for option in options:
             if option.is_selected():
-                return option.get_attribute('value')
+                return option.get_attribute("value")
 
     def is_option_selected(self, selector, value):
         options = self.css(selector)
         for option in options:
-            if option.is_selected() != (value == option.get_attribute('value')):
-                print(option.get_attribute('value'))
+            if option.is_selected() != (value == option.get_attribute("value")):
+                print(option.get_attribute("value"))
                 return False
         return True
 
@@ -471,57 +487,55 @@ class SeleniumBot:
         self.driver.save_screenshot(path)
 
     def scroll_up(self, y=100):
-        scroll = self.driver.execute_script('return document.documentElement.scrollTop')
-        self.driver.execute_script(f'scrollTo(0, {scroll - y})')
+        scroll = self.driver.execute_script("return document.documentElement.scrollTop")
+        self.driver.execute_script(f"scrollTo(0, {scroll - y})")
 
     def scroll_down(self, y=400):
-        scroll = self.driver.execute_script('return document.documentElement.scrollTop')
-        self.driver.execute_script(f'scrollTo(0, {scroll + y})')
+        scroll = self.driver.execute_script("return document.documentElement.scrollTop")
+        self.driver.execute_script(f"scrollTo(0, {scroll + y})")
 
     def log(self, screenshot=False, error=None):
         try:
             timestamp = str(int(time.time()))
-            filename = os.path.join('log', timestamp)
-            output = ''
+            filename = os.path.join("log", timestamp)
+            output = ""
 
-            if not os.path.exists('log'):
-                os.mkdir('log')
+            if not os.path.exists("log"):
+                os.mkdir("log")
 
             if screenshot:
-                self.save_screenshot(f'{filename}.png')
+                self.save_screenshot(f"{filename}.png")
 
-            output += str(self.driver.current_url) + '\n\n'
+            output += str(self.driver.current_url) + "\n\n"
 
             if error:
-                output += f'{error}\n\n'
+                output += f"{error}\n\n"
 
             output += str(self.driver.page_source)
 
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            output += str(soup.prettify()) + '\n\n'
+            soup = BeautifulSoup(self.driver.page_source, "html.parser")
+            output += str(soup.prettify()) + "\n\n"
 
-            with open(f'{filename}.log', 'w', encoding='utf8') as f:
+            with open(f"{filename}.log", "w", encoding="utf8") as f:
                 f.write(output)
 
         except Exception as e:
             print(e)
 
-    def highlight(self, element,
-                  css=False):
+    def highlight(self, element, css=False):
         if css:
             element = self.css(element)
         self.driver.execute_script("arguments[0].style.border='6px groove green'", element)
 
-
     def download_file(url, path=BASE_DIR):
-        with open(path, 'wb') as f:
+        with open(path, "wb") as f:
             r = requests.get(url)
             for chunk in r.iter_content(1024):
                 f.write(chunk)
 
     def random_sleep(self, *args, **kwargs):
 
-        if kwargs.get('long'):
+        if kwargs.get("long"):
             time.sleep(random.uniform(self.MIN_RAND_LONG, self.MAX_RAND_LONG))
 
         elif len(args) == 1:
@@ -538,43 +552,46 @@ class SeleniumBot:
         chrome_options = webdriver.ChromeOptions()
 
         if self.DEV_SETTINGS:
-            chrome_options.add_argument('--fast-start')
-            chrome_options.add_argument('--window-size=1920,1080')
-            chrome_options.add_argument('--window-position=1072,642')
+            chrome_options.add_argument("--fast-start")
+            chrome_options.add_argument("--window-size=1920,1080")
+            chrome_options.add_argument("--window-position=1072,642")
 
         if self.HEADLESS:
-            chrome_options.add_argument('--headless')
+            chrome_options.add_argument("--headless")
 
         chrome_options.add_argument("--silent")
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--log-level=3")
-        chrome_options.add_argument('--start-maximized')
-        chrome_options.add_argument('--disable-infobars')
+        chrome_options.add_argument("--start-maximized")
+        chrome_options.add_argument("--disable-infobars")
         # chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_argument('--disable-notifications')
+        chrome_options.add_experimental_option("useAutomationExtension", False)
+        chrome_options.add_argument("--disable-notifications")
         chrome_options.add_argument("--disable-plugins-discovery")
         # chrome_options.add_argument('--profile-directory=default')
-        chrome_options.add_experimental_option("excludeSwitches",
-                                               ["enable-automation",
-                                                # "ignore-certificate-errors",
-                                                "safebrowing-disable-auto-update",
-                                                "disable-client-side-phishing-detection",
-                                                "safebrowsing-disable-download-protection",
-                                                "enable-logging"  # Disable logging
-                                                ])
+        chrome_options.add_experimental_option(
+            "excludeSwitches",
+            [
+                "enable-automation",
+                # "ignore-certificate-errors",
+                "safebrowing-disable-auto-update",
+                "disable-client-side-phishing-detection",
+                "safebrowsing-disable-download-protection",
+                "enable-logging",  # Disable logging
+            ],
+        )
 
         self.driver = webdriver.Chrome(options=chrome_options)
 
         self.driver.maximize_window()
 
     def spawn_driver(self):
-        if not self.driver:
+        if not self._driver:
             self.create_driver()
 
     def restart_driver(self):
-        if self.driver:
+        if self._driver:
             self.close()
             time.sleep(3)
         self.create_driver()

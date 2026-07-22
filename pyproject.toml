@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "formharvester"
-version = "1.0.0"
+version = "0.2.0"
 description = "AI-assisted form intelligence engine: search, scrape contacts, and submit forms"
 readme = "README.md"
 license = {text = "MIT"}
@@ -57,7 +57,7 @@ select = [
     "UP",  # pyupgrade
 ]
 
-# Legacy engine code moved verbatim in the 1.0.0 package reorg. Behaviour is
+# Legacy engine code moved verbatim in the 0.2.0 package reorg. Behaviour is
 # preserved as-is (issue #7: no regressions); pre-existing style is grandfathered
 # so the reorg stays a pure move. New modules (captcha/, api, core) stay strict.
 [tool.ruff.lint.per-file-ignores]

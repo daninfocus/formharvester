@@ -44,9 +44,7 @@ class DeathByCaptchaSolver:
 
     def _poll(self, captcha_id: int) -> str | None:
         def fetch() -> str | None:
-            response = requests.get(
-                f"{_BASE}/captcha/{captcha_id}", headers=_HEADERS, timeout=30
-            )
+            response = requests.get(f"{_BASE}/captcha/{captcha_id}", headers=_HEADERS, timeout=30)
             if response.status_code != 200:
                 return None
             return response.json().get("text") or None

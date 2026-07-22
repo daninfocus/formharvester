@@ -31,9 +31,7 @@ class FakeResponse:
 def test_factory_none_and_auto_detect() -> None:
     assert create_solver(None) is None
     assert create_solver("none") is None
-    assert isinstance(
-        create_solver(None, dbc_username="u", dbc_password="p"), DeathByCaptchaSolver
-    )
+    assert isinstance(create_solver(None, dbc_username="u", dbc_password="p"), DeathByCaptchaSolver)
     assert isinstance(create_solver(None, twocaptcha_api_key="k"), TwoCaptchaSolver)
 
 
@@ -77,9 +75,7 @@ def test_twocaptcha_solve_image(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_twocaptcha_recaptcha_submit_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        two_mod.requests, "post", lambda *a, **k: FakeResponse({"status": 0, "request": "ERR"})
-    )
+    monkeypatch.setattr(two_mod.requests, "post", lambda *a, **k: FakeResponse({"status": 0, "request": "ERR"}))
     solver = TwoCaptchaSolver("key", poll_interval=0)
     assert solver.solve_recaptcha("sitekey", "https://x.com") is None
 

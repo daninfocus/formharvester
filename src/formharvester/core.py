@@ -12,6 +12,8 @@ them in memory; the CLI overrides them to also write progress/log files.
 from __future__ import annotations
 
 import time
+from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING
 
 from formharvester.captcha.detector import CaptchaMixin
 from formharvester.engine import SeleniumBot
@@ -19,8 +21,18 @@ from formharvester.form_handler import FormHandlerMixin
 from formharvester.scraper.emails import EmailScraperMixin
 from formharvester.utils import get_root_url
 
-__VERSION__ = "1.0.0"
-__FIGLET__ = r'''           @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+if TYPE_CHECKING:
+    from formharvester._typing import EngineProtocol as _StateBase
+else:
+    _StateBase = object
+
+try:
+    __VERSION__ = version("formharvester")
+except PackageNotFoundError:
+    # Running from source without an installed distribution (e.g. some editors' import
+    # resolution). pyproject.toml remains the single source of truth for the real version.
+    __VERSION__ = "0.0.0+unknown"
+__FIGLET__ = r"""           @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
            @@@@@@@@@@@@@@@@@800GGGGGGGG00088@@@@@@@@@@@@@@@@@
            @@@@@@@@@@@@@@0GG00888@@@@@@8880GGG8@@@@@@@@@@@@@@
            @@@@@@@@@@@@0C08@@@@@@@@@@@@@@@@@@0CC@@@@@@@@@@@@@
@@ -50,14 +62,10 @@ __FIGLET__ = r'''           @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
  | |_ / _ \| '__| '_ ` _ \| |_| |/ _` | '__\ \ / / _ \/ __| __/ _ \ '__|
  |  _| (_) | |  | | | | | |  _  | (_| | |   \ V /  __/\__ \ ||  __/ |
  |_|  \___/|_|  |_| |_| |_|_| |_|\__,_|_|    \_/ \___||___/\__\___|_|
-
-                          ░▀▀▄░░░░▀▀▄░░░░▀▀▄
-                          ░▄▀░░░░░▄▀░░░░░▄▀░
-                          ░▀▀▀░▀░░▀▀▀░▀░░▀▀▀
-'''
+"""
 
 
-class HarvesterCore(SeleniumBot, CaptchaMixin, EmailScraperMixin, FormHandlerMixin):
+class HarvesterCore(SeleniumBot, CaptchaMixin, EmailScraperMixin, FormHandlerMixin, _StateBase):
     """Browser + captcha + scraper + form-handler, with in-memory status hooks."""
 
     max_time = 30

@@ -14,6 +14,7 @@ structured :class:`HarvestResult` objects back.
 
 from __future__ import annotations
 
+import threading
 import time
 import traceback
 from collections.abc import Iterable, Iterator
@@ -36,7 +37,7 @@ __all__ = [
     "harvest_sites",
 ]
 
-# The per-site outcomes the engine can report — the same tokens the CLI writes.
+# The per-site outcomes the engine can report - the same tokens the CLI writes.
 HarvestStatus = Literal[
     "SUBMITTED",
     "FORM_NOT_FOUND",
@@ -146,7 +147,7 @@ class FormHarvester(HarvesterCore):
         self.scraped_emails: set[tuple[str, str]] = set()
         self.name_filled = False
         self.crawl = True
-        self.threads: list[object] = []
+        self.threads: list[threading.Thread] = []
         self.last_status: str | None = None
 
         self.create_driver()
@@ -178,7 +179,7 @@ class FormHarvester(HarvesterCore):
             self.crawl = False
             while self.threads:
                 thread = self.threads.pop()
-                thread.join(timeout=2)  # type: ignore[attr-defined]
+                thread.join(timeout=2)
             self.crawl = True
 
         status: HarvestStatus = self.last_status or "ERROR"  # type: ignore[assignment]

@@ -55,7 +55,5 @@ class TwoCaptchaSolver:
         return self._poll(captcha_id) if captcha_id else None
 
     def solve_recaptcha(self, site_key: str, page_url: str) -> str | None:
-        captcha_id = self._submit(
-            {"method": "userrecaptcha", "googlekey": site_key, "pageurl": page_url}
-        )
+        captcha_id = self._submit({"method": "userrecaptcha", "googlekey": site_key, "pageurl": page_url})
         return self._poll(captcha_id) if captcha_id else None

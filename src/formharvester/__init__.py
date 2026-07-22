@@ -1,4 +1,4 @@
-"""FormHarvester — AI-assisted form intelligence engine.
+"""FormHarvester - AI-assisted form intelligence engine.
 
 Public API:
 

@@ -64,12 +64,10 @@ pip install -e .
 formharvester          # runs the config-driven harvest loop (reads config.txt)
 ```
 
-`python bot.py` still works (a compatibility shim for the pre-1.0.0 entry point).
-
 ## Programmatic use (library API)
 
-Since `1.0.0` FormHarvester ships a library API so you can drive the engine from
-your own code — no `config.txt`, input CSV or progress files required. The CLI
+Since `0.2.0` FormHarvester ships a library API so you can drive the engine from
+your own code - no `config.txt`, input CSV or progress files required. The CLI
 is unchanged.
 
 ```python
@@ -90,11 +88,11 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
 ```
 
 `result.status` is one of `SUBMITTED`, `FORM_NOT_FOUND`, `BUTTON_NOT_FOUND`,
-`VISITED`, or `ERROR` — the same tokens the CLI writes to its progress file.
+`VISITED`, or `ERROR` - the same tokens the CLI writes to its progress file.
 One-shot helpers `harvest_site(url, details)` and `harvest_sites(urls, details)`
 are also available.
 
-## Package layout (1.0.0)
+## Package layout (0.2.0)
 
 ```
 src/formharvester/

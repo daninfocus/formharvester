@@ -6,57 +6,63 @@ import random
 import re
 import threading
 import time
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 
 from selenium.webdriver.common.keys import Keys
 
+if TYPE_CHECKING:
+    from formharvester._typing import EngineProtocol as _Base
+else:
+    _Base = object
 
-class FormHandlerMixin:
+
+class FormHandlerMixin(_Base):
     @staticmethod
     def clean_text(text):
-        return text.replace('-', '').lower()
+        return text.replace("-", "").lower()
 
     def wait_get_inputs(self):
-        self.wait_show_element('input', wait=3)
-        return self.css('input', getall=True)
+        self.wait_show_element("input", wait=3)
+        return self.css("input", getall=True)
 
     def find_radio_divs(self):
-        radios = self.css('input[type=radio]', getall=True)
+        radios = self.css("input[type=radio]", getall=True)
         radio_divs = set()
         for radio in radios:
-            x = self.xpath('./ancestor::div[1]', node=radio)
+            x = self.xpath("./ancestor::div[1]", node=radio)
             radio_divs.add(x)
         return list(radio_divs)
 
     def check_calculation_captcha(self):
-        match = re.findall(r'(\d+)\s([+\-*])\s(\d+)(\s=)?', self.driver.page_source)
+        match = re.findall(r"(\d+)\s([+\-*])\s(\d+)(\s=)?", self.driver.page_source)
         if match:
             match = match[0]
             no1 = int(match[0])
             op = match[1]
             no2 = int(match[2])
-            if op == '+':
+            if op == "+":
                 return str(no1 + no2)
-            elif op == '-':
+            elif op == "-":
                 return str(no1 - no2)
-            elif op == '*':
+            elif op == "*":
                 return str(no1 * no2)
 
     def check_and_fill(self, element, field_type=None):
-        if field_type == 'number':
+        if field_type == "number":
             random_n = str(random.randint(1, 5))
             element.send_keys(random_n)
             return True
 
-        tag = element.get_attribute('outerHTML')
+        tag = element.get_attribute("outerHTML")
 
         ancestor = self.xpath(
-            './preceding::label[1]',
+            "./preceding::label[1]",
             node=element,
-            attr='outerHTML',
+            attr="outerHTML",
         )
         if not ancestor:
-            ancestor = ''
+            ancestor = ""
 
         fields = [
             self.clean_text(tag),
@@ -66,12 +72,10 @@ class FormHandlerMixin:
         element.clear()
 
         for field in fields:
-            if 'email' in field:
-                element.send_keys(
-                    self.details['email']
-                )
+            if "email" in field:
+                element.send_keys(self.details["email"])
                 return True
-            elif bool(re.findall(r'(captcha)', field)):
+            elif bool(re.findall(r"(captcha)", field)):
                 calc_res = self.check_calculation_captcha()
                 if calc_res:
                     element.send_keys(calc_res)
@@ -80,73 +84,51 @@ class FormHandlerMixin:
                 if captcha_text:
                     element.send_keys(captcha_text)
                     return True
-            elif 'phone' in field:
-                element.send_keys(
-                    self.details['phone']
-                )
+            elif "phone" in field:
+                element.send_keys(self.details["phone"])
                 return True
-            elif 'city' in field:
-                element.send_keys(
-                    self.details['city']
-                )
+            elif "city" in field:
+                element.send_keys(self.details["city"])
                 return True
-            elif 'state' in field:
-                element.send_keys(
-                    self.details['state']
-                )
+            elif "state" in field:
+                element.send_keys(self.details["state"])
                 return True
-            elif bool(re.findall(r'(location|address)', field)):
-                element.send_keys(
-                    self.details['location']
-                )
-            elif bool(re.findall(r'(location|address)', field)):
-                element.send_keys(
-                    self.details['location']
-                )
-            elif bool(re.findall(r'(subject|topic)', field)):
-                element.send_keys(
-                    self.details['subject']
-                )
+            elif bool(re.findall(r"(location|address)", field)):
+                element.send_keys(self.details["location"])
+            elif bool(re.findall(r"(location|address)", field)):
+                element.send_keys(self.details["location"])
+            elif bool(re.findall(r"(subject|topic)", field)):
+                element.send_keys(self.details["subject"])
                 return True
-            elif bool(re.findall(r'(firstname|givenname|fname|first)', field)):
-                element.send_keys(
-                    self.details['first_name']
-                )
+            elif bool(re.findall(r"(firstname|givenname|fname|first)", field)):
+                element.send_keys(self.details["first_name"])
                 self.name_filled = True
                 return True
-            elif bool(re.findall(r'(lastname|lname|surname|last)', field)):
-                element.send_keys(
-                    self.details['last_name']
-                )
+            elif bool(re.findall(r"(lastname|lname|surname|last)", field)):
+                element.send_keys(self.details["last_name"])
                 self.name_filled = True
                 return True
-        if any(['name' in i for i in fields]) and not self.name_filled:
-            element.send_keys(
-                f"{self.details['first_name']} {self.details['last_name']}"
-            )
+        if any(["name" in i for i in fields]) and not self.name_filled:
+            element.send_keys(f"{self.details['first_name']} {self.details['last_name']}")
             self.name_filled = True
             return True
         else:
-            element.send_keys(
-                "N/A"
-            )
+            element.send_keys("N/A")
             return True
 
     def find_contact_page(self, url):
         contact_links = []
         contact_links.extend(
             self.xpath(
-                '''//a[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'contact')]'''
-                , getall=True
+                """//a[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'contact')]""",
+                getall=True,
             )
         )
-        contact_links.extend(
-            self.css('a[href*="contact"]', getall=True)
-        )
+        contact_links.extend(self.css('a[href*="contact"]', getall=True))
         if not contact_links:
             return []
 
-        contact_hrefs = [i.get_attribute('href') for i in set(contact_links)]
+        contact_hrefs = [i.get_attribute("href") for i in set(contact_links)]
 
         try:
             self.click(contact_links[0])
@@ -154,7 +136,7 @@ class FormHandlerMixin:
             pass
 
         inputs = self.wait_get_inputs()
-        if not self.css('textarea'):
+        if not self.css("textarea"):
             if contact_hrefs:
                 for href in contact_hrefs:
                     full_url = urljoin(url, href)
@@ -178,18 +160,18 @@ class FormHandlerMixin:
 
     def find_submit_button(self):
         possible_css = [
-            'input[type=submit]',
-            'input[name=submit]',
-            'input[value=submit]',
-            'button[class=submit]',
-            'button[name=submit]',
+            "input[type=submit]",
+            "input[name=submit]",
+            "input[value=submit]",
+            "button[class=submit]",
+            "button[name=submit]",
         ]
         possible_names = [
-            'submit',
-            'send',
-            'enviar',
-            'inviare',
-            'book now',
+            "submit",
+            "send",
+            "enviar",
+            "inviare",
+            "book now",
         ]
 
         for css in possible_css:
@@ -199,9 +181,9 @@ class FormHandlerMixin:
 
         for name in possible_names:
             found = self.xpath(
-                f'''
+                f"""
                 //button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'send')] | //input[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'{name}')]
-                '''
+                """
             )
             if found:
                 return found
@@ -216,17 +198,15 @@ class FormHandlerMixin:
                 btn.click()
             except:
                 try:
-                    form = self.css('form')
+                    form = self.css("form")
                     if form:
-                        self.script('arguments[0].submit();', form)
+                        self.script("arguments[0].submit();", form)
                 except:
                     return False
 
     def cms_check(self):
         existing = []
-        existing.extend(
-            self.xpath('//script[contains(text(), "squarespace")]', getall=True)
-        )
+        existing.extend(self.xpath('//script[contains(text(), "squarespace")]', getall=True))
         if not existing:
             # Popup check
             self.press_key(Keys.ESCAPE)
@@ -241,7 +221,7 @@ class FormHandlerMixin:
         self.scraped_emails = set()
         self.visited_links.clear()
 
-        contact_url = urljoin(url, '/contact/')
+        contact_url = urljoin(url, "/contact/")
         contact = self.get(contact_url, sleep=1, check=True)
         if not contact:
             return
@@ -258,13 +238,13 @@ class FormHandlerMixin:
         self.cms_check()
         inputs = self.wait_get_inputs()
 
-        if contact and not self.css('textarea'):
+        if contact and not self.css("textarea"):
             inputs = self.find_contact_page(url)
 
         if not self.crawl:
             return
 
-        if not self.css('textarea'):
+        if not self.css("textarea"):
             x = self.get(url, sleep=1, timeout=10)
             if not x:
                 return
@@ -274,49 +254,50 @@ class FormHandlerMixin:
             self.driver.switch_to.window(self.driver.window_handles[0])
             self.cms_check()
             inputs = self.wait_get_inputs()
-            if not self.css('textarea'):
+            if not self.css("textarea"):
                 inputs = self.find_contact_page(url)
 
         if not self.crawl:
             return
 
         if not self.send_form:
-            self._set_status(url, 'VISITED')
+            self._set_status(url, "VISITED")
             return True
 
         if inputs:
             # Fill text/email inputs
             for i in inputs:
-                if i.get_attribute('type') in ['text', 'email', 'tel']:
+                if i.get_attribute("type") in ["text", "email", "tel"]:
                     try:
                         self.check_and_fill(i)
                     except:
                         continue
-                if i.get_attribute('type') in ['number']:
+                if i.get_attribute("type") in ["number"]:
                     try:
-                        self.check_and_fill(i, field_type='number')
+                        self.check_and_fill(i, field_type="number")
                     except:
                         continue
 
             # Check any radios
             radio_divs = self.find_radio_divs()
             for div in radio_divs:
-                radios = self.css('input[type=radio]',
-                                  node=div,
-                                  getall=True,
-                                  )
+                radios = self.css(
+                    "input[type=radio]",
+                    node=div,
+                    getall=True,
+                )
                 for radio in radios[::-1]:
                     try:
                         self.click(radio)
-                        time.sleep(.5)
+                        time.sleep(0.5)
                         break
                     except:
                         continue
 
             # Select any options
-            selects = self.css('form select', getall=True)
+            selects = self.css("form select", getall=True)
             for select in selects:
-                options = self.css('option', node=select, getall=True)
+                options = self.css("option", node=select, getall=True)
                 for option in options[::-1]:
                     try:
                         option.click()
@@ -325,10 +306,10 @@ class FormHandlerMixin:
                         continue
 
             # Fill message textarea
-            textarea = self.css('textarea')
+            textarea = self.css("textarea")
             if textarea:
                 self.click(textarea)
-                self.write(textarea, self.details['message'])
+                self.write(textarea, self.details["message"])
 
             # Sleep
             time.sleep(3)
@@ -344,12 +325,12 @@ class FormHandlerMixin:
                     captcha_solved = self.check_solve_captchas(recaptcha=True)
                     if captcha_solved:
                         self.submit_button(btn)
-                self._set_status(url, 'SUBMITTED')
+                self._set_status(url, "SUBMITTED")
             elif btn and self.DEBUG:
                 self.highlight(btn)
             else:
-                self._set_status(url, 'BUTTON_NOT_FOUND')
+                self._set_status(url, "BUTTON_NOT_FOUND")
             return True
         else:
-            self._set_status(url, 'FORM_NOT_FOUND')
+            self._set_status(url, "FORM_NOT_FOUND")
             return False
