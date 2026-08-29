@@ -285,10 +285,103 @@ function render() {
   $$("[data-setting]").forEach((el) => writeInput(el, get(state.settings, el.dataset.setting)));
   $$("[data-profile]").forEach((el) => writeInput(el, get(state.profile, el.dataset.profile)));
   $$("[data-profile-list]").forEach((el) => {
-    el.value = (state.profile[el.dataset.profileList] || []).join("\n");
+    el.value = (get(state.profile, el.dataset.profileList) || []).join("\n");
   });
   previousLlmProvider = get(state.settings, "llm.provider");
   updateConditionalFields();
+  renderPolicyState();
+  renderLeadMetrics(state.lead_metrics || {});
+}
+
+function renderPolicyState() {
+  const enabled = Boolean(get(state.profile, "policy.autopilot_enabled"));
+  const badge = $("#policy-state");
+  if (!badge) return;
+  badge.textContent = enabled ? "autopilot" : "manual";
+  badge.classList.toggle("on", enabled);
+}
+
+function renderLeadMetrics(metrics) {
+  const values = {
+    total: metrics.total || 0,
+    qualified: metrics.qualified || 0,
+    submitted: metrics.submitted || 0,
+    average_score: metrics.average_score || 0,
+  };
+  if ($("#metric-total")) $("#metric-total").textContent = values.total;
+  if ($("#metric-qualified")) $("#metric-qualified").textContent = values.qualified;
+  if ($("#metric-submitted")) $("#metric-submitted").textContent = values.submitted;
+  if ($("#metric-average")) $("#metric-average").textContent = values.average_score;
+}
+
+function appendLeadDetail(container, label, value) {
+  const row = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = label + ": ";
+  row.append(strong, document.createTextNode(value || "none"));
+  container.appendChild(row);
+}
+
+function renderLeads(payload) {
+  renderLeadMetrics(payload.metrics || {});
+  const cards = $("#lead-cards");
+  const empty = $("#leads-empty");
+  if (!cards || !empty) return;
+  cards.replaceChildren();
+  empty.hidden = Boolean(payload.leads?.length);
+  for (const lead of payload.leads || []) {
+    const card = document.createElement("article");
+    card.className = "lead-card";
+
+    const header = document.createElement("div");
+    header.className = "lead-card-header";
+    const titleGroup = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "lead-card-title";
+    title.textContent = lead.domain;
+    const meta = document.createElement("div");
+    meta.className = "lead-card-meta";
+    meta.textContent = lead.url + " · " + lead.status;
+    titleGroup.append(title, meta);
+    const score = document.createElement("div");
+    score.className = "lead-card-score";
+    score.textContent = Math.round(lead.score || 0) + "/100";
+    header.append(titleGroup, score);
+    card.appendChild(header);
+
+    const details = document.createElement("div");
+    details.className = "lead-card-details";
+    const technologyNames = (lead.technologies || []).map((item) => item.name).join(", ");
+    appendLeadDetail(details, "Technologies", technologyNames);
+    appendLeadDetail(details, "Emails", (lead.emails || []).join(", "));
+    appendLeadDetail(details, "Why", (lead.reasons || []).join(" · "));
+    if (lead.draft_subject || lead.draft_message) appendLeadDetail(details, "Draft", lead.draft_subject);
+    card.appendChild(details);
+
+    const actions = document.createElement("div");
+    actions.className = "actions lead-card-actions";
+    const auditButton = document.createElement("button");
+    auditButton.className = "btn";
+    auditButton.textContent = "Audit";
+    auditButton.addEventListener("click", async () => {
+      const result = await window.pywebview.api.get_lead_audit(lead.id);
+      if (result.ok) toast(result.events.length + " audit events recorded for " + lead.domain + ".");
+    });
+    actions.appendChild(auditButton);
+    const suppressButton = document.createElement("button");
+    suppressButton.className = lead.suppressed ? "btn" : "btn danger";
+    suppressButton.textContent = lead.suppressed ? "Unsuppress" : "Suppress";
+    suppressButton.addEventListener("click", async () => {
+      const method = lead.suppressed ? "unsuppress_lead" : "suppress_lead";
+      const result = await window.pywebview.api[method](lead.id);
+      if (!result.ok) return toast(result.error, true);
+      await refreshLeads();
+      toast(lead.suppressed ? "Lead restored." : "Lead suppressed.");
+    });
+    actions.appendChild(suppressButton);
+    card.appendChild(actions);
+    cards.appendChild(card);
+  }
 }
 
 function setRunning(running) {
@@ -341,8 +434,16 @@ function appendLines(lines) {
 async function reload() {
   state = await window.pywebview.api.get_state();
   render();
+  await refreshLeads();
   setRunning(state.running);
   renderReview(state.review);
+}
+
+async function refreshLeads() {
+  if (!window.pywebview?.api?.get_leads) return;
+  const status = $("#lead-status-filter")?.value || null;
+  const payload = await window.pywebview.api.get_leads(status);
+  renderLeads(payload);
 }
 
 function collectSettings() {
@@ -355,10 +456,10 @@ function collectProfile() {
   const next = JSON.parse(JSON.stringify(state.profile));
   $$("[data-profile]").forEach((el) => set(next, el.dataset.profile, readInput(el)));
   $$("[data-profile-list]").forEach((el) => {
-    next[el.dataset.profileList] = el.value
+    set(next, el.dataset.profileList, el.value
       .split("\n")
       .map((line) => line.trim())
-      .filter(Boolean);
+      .filter(Boolean));
   });
   return next;
 }
@@ -373,8 +474,9 @@ async function start() {
 
 async function poll() {
   if (!window.pywebview) return;
-  const { lines, running, review } = await window.pywebview.api.poll();
+  const { lines, running, review, lead_metrics } = await window.pywebview.api.poll();
   appendLines(lines);
+  renderLeadMetrics(lead_metrics || {});
   setRunning(running);
   renderReview(review);
 }
@@ -382,7 +484,10 @@ async function poll() {
 // --- wiring -------------------------------------------------------------
 
 $$("nav button").forEach((button) => {
-  button.addEventListener("click", () => selectPanel(button.dataset.panel));
+  button.addEventListener("click", () => {
+    selectPanel(button.dataset.panel);
+    if (button.dataset.panel === "leads") refreshLeads();
+  });
 });
 
 $("#btn-start").addEventListener("click", start);
@@ -402,6 +507,20 @@ $("#llm-enabled").addEventListener("change", () => {
   updateConditionalFields();
 });
 $("#captcha-provider").addEventListener("change", updateConditionalFields);
+$("#lead-status-filter").addEventListener("change", refreshLeads);
+$("#btn-refresh-leads").addEventListener("click", refreshLeads);
+$("#btn-export-leads").addEventListener("click", async () => {
+  const result = await window.pywebview.api.export_leads();
+  if (result.ok) toast("Leads exported to " + result.path + ".");
+  else toast(result.error, true);
+});
+$("#lead-status-filter").addEventListener("change", refreshLeads);
+$("#btn-refresh-leads").addEventListener("click", refreshLeads);
+$("#btn-export-leads").addEventListener("click", async () => {
+  const result = await window.pywebview.api.export_leads();
+  if (result.ok) toast("Leads exported to " + result.path + ".");
+  else toast(result.error, true);
+});
 
 $("#btn-stop").addEventListener("click", async () => {
   const result = await window.pywebview.api.stop();

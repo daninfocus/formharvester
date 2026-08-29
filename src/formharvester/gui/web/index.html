@@ -34,6 +34,10 @@
     <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h3M11 12h9M4 18h10M18 18h2" /><circle cx="16" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="16" cy="18" r="2" /></svg>
     <span>Settings</span>
   </button>
+  <button data-panel="leads">
+    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5M8 17h3" /></svg>
+    <span>Leads</span>
+  </button>
 </nav>
 
 <main>
@@ -165,10 +169,67 @@
       </label>
     </fieldset>
 
+    <fieldset>
+      <legend><svg class="legend-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5M8 17h3" /></svg>Qualification &amp; safety</legend>
+      <div class="setting-intro">
+        <div>
+          <strong>Selective autopilot</strong>
+          <span>Only submit leads that pass score, technology, cooldown, and safety rules.</span>
+        </div>
+        <span class="status-badge" id="policy-state">manual</span>
+      </div>
+      <label class="toggle-row">
+        <input type="checkbox" data-profile="policy.autopilot_enabled" />
+        <span class="toggle" aria-hidden="true"></span>
+        <span class="toggle-copy"><strong>Enable selective autopilot</strong><small>Requires LLM-generated content and explicit campaign limits.</small></span>
+      </label>
+      <div class="grid policy-grid">
+        <label>Minimum lead score <span class="hint">0–100</span><input type="number" min="0" max="100" data-profile="policy.minimum_score" /></label>
+        <label>Cooldown <span class="hint">days per domain</span><input type="number" min="0" data-profile="policy.cooldown_days" /></label>
+        <label>Run limit <span class="hint">submissions per run</span><input type="number" min="1" data-profile="policy.max_submissions_per_run" /></label>
+        <label>Daily limit <span class="hint">submissions per day</span><input type="number" min="1" data-profile="policy.max_submissions_per_day" /></label>
+      </div>
+      <div class="grid policy-grid">
+        <label class="check"><input type="checkbox" data-profile="policy.require_review" /> Require review before submitting</label>
+        <label class="check"><input type="checkbox" data-profile="policy.require_contact_form" /> Require a detected contact form</label>
+        <label class="check"><input type="checkbox" data-profile="policy.dry_run" /> Dry run: draft and record, never submit</label>
+      </div>
+      <div class="grid content-fields-grid policy-tech-grid">
+        <label>Include technologies <span class="hint">one per line; empty allows all</span><textarea data-profile-list="policy.include_technologies"></textarea></label>
+        <label>Exclude technologies <span class="hint">one per line</span><textarea data-profile-list="policy.exclude_technologies"></textarea></label>
+      </div>
+    </fieldset>
+
     <div class="autosave-note">
       <svg class="note-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7.5" /></svg>
       <span>Campaign changes save automatically to the selected campaign.</span>
     </div>
+  </section>
+
+  <!-- Leads -->
+  <section class="panel" id="panel-leads">
+    <fieldset>
+      <legend><svg class="legend-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5M8 17h3" /></svg>Lead intelligence</legend>
+      <div class="setting-intro">
+        <div>
+          <strong>What the campaign has learned</strong>
+          <span>Scores, technology evidence, drafts, policy decisions, and submission history are stored locally.</span>
+        </div>
+        <span class="status-badge on">local</span>
+      </div>
+      <div class="lead-metrics" id="lead-metrics">
+        <div class="metric"><strong id="metric-total">0</strong><span>discovered</span></div>
+        <div class="metric"><strong id="metric-qualified">0</strong><span>qualified</span></div>
+        <div class="metric"><strong id="metric-submitted">0</strong><span>submitted</span></div>
+        <div class="metric"><strong id="metric-average">0</strong><span>average score</span></div>
+      </div>
+      <div class="lead-toolbar">
+        <label>Show <select id="lead-status-filter"><option value="">All statuses</option><option value="QUALIFIED">Qualified</option><option value="SUBMITTED">Submitted</option><option value="POLICY_BLOCKED">Policy blocked</option><option value="SUPPRESSED">Suppressed</option><option value="ERROR">Errors</option></select></label>
+        <div class="actions"><button class="btn" id="btn-refresh-leads">Refresh</button><button class="btn" id="btn-export-leads">Export CSV</button></div>
+      </div>
+      <div id="lead-cards" class="lead-cards"></div>
+      <p id="leads-empty" class="empty">No leads recorded yet. Run a campaign to populate this view.</p>
+    </fieldset>
   </section>
 
   <!-- Settings -->

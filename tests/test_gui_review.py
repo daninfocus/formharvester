@@ -6,6 +6,7 @@ import threading
 import time
 
 from formharvester.gui.api import Api
+from formharvester.leads import LeadRepository
 from formharvester.llm import GeneratedFormContent
 from formharvester.settings import (
     CampaignProfile,
@@ -30,7 +31,8 @@ def _wait_for_review(api: Api) -> dict[str, str]:
     raise AssertionError("review was not published")
 
 
-def test_gui_review_approval_returns_edited_content() -> None:
+def test_gui_review_approval_returns_edited_content(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("FORMHARVESTER_HOME", str(tmp_path))
     api = Api()
     result: list[GeneratedFormContent | None] = []
     thread = threading.Thread(
@@ -51,7 +53,8 @@ def test_gui_review_approval_returns_edited_content() -> None:
     assert api.poll()["review"] is None
 
 
-def test_gui_review_skip_returns_none_and_clears_pending_state() -> None:
+def test_gui_review_skip_returns_none_and_clears_pending_state(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("FORMHARVESTER_HOME", str(tmp_path))
     api = Api()
     result: list[GeneratedFormContent | None] = []
     thread = threading.Thread(
@@ -120,3 +123,29 @@ def test_gui_start_warns_when_llm_has_no_provider_key(tmp_path, monkeypatch) -> 
         "ok": False,
         "error": "LLM is enabled, but no openai API key is configured in Settings.",
     }
+
+
+def test_gui_lead_queue_lists_suppresses_and_exports(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("FORMHARVESTER_HOME", str(tmp_path))
+    save_settings(Settings(active_profile="campaign"))
+    save_profile(CampaignProfile(name="campaign"))
+    with LeadRepository(tmp_path / "data") as leads:
+        record = leads.upsert_discovered("campaign", "example.com", url="https://example.com")
+        leads.update_enrichment(
+            "campaign",
+            "example.com",
+            status="QUALIFIED",
+            score=85,
+            reasons=["Contact form available"],
+            technologies=[{"name": "WordPress", "confidence": 0.98}],
+            emails=["hello@example.com"],
+            form_found=True,
+        )
+
+    api = Api()
+    payload = api.get_leads()
+    assert payload["metrics"]["qualified"] == 1
+    assert payload["leads"][0]["domain"] == "example.com"
+    assert api.suppress_lead(record.id)["ok"] is True
+    assert api.get_leads("SUPPRESSED")["leads"][0]["suppressed"] is True
+    assert api.export_leads()["ok"] is True

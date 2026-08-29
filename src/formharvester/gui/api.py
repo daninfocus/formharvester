@@ -19,11 +19,13 @@ from pydantic import ValidationError
 
 from formharvester.cli.app import Bot
 from formharvester.core import __VERSION__
+from formharvester.leads import LeadRepository
 from formharvester.llm import GeneratedFormContent, ReviewCallback
 from formharvester.settings import (
     CampaignProfile,
     Settings,
     config_home,
+    data_dir,
     list_profiles,
     load_profile,
     load_settings,
@@ -90,6 +92,8 @@ class Api:
 
     def get_state(self) -> dict[str, Any]:
         settings = load_settings()
+        with LeadRepository(data_dir()) as leads:
+            lead_metrics = leads.metrics(settings.active_profile)
         return {
             "settings": settings.model_dump(),
             "profile": load_profile(settings.active_profile).model_dump(),
@@ -98,7 +102,44 @@ class Api:
             "version": __VERSION__,
             "running": self._is_running(),
             "review": self._review_snapshot(),
+            "lead_metrics": lead_metrics,
         }
+
+    def get_leads(self, status: str | None = None) -> dict[str, Any]:
+        campaign = load_settings().active_profile
+        with LeadRepository(data_dir()) as leads:
+            records = leads.list_leads(campaign=campaign, status=status, limit=250)
+            return {
+                "leads": [record.to_dict() for record in records],
+                "metrics": leads.metrics(campaign),
+            }
+
+    def get_lead_audit(self, record_id: str) -> dict[str, Any]:
+        with LeadRepository(data_dir()) as leads:
+            return {"ok": True, "events": leads.audit(record_id)}
+
+    def suppress_lead(self, record_id: str) -> dict[str, Any]:
+        with LeadRepository(data_dir()) as leads:
+            try:
+                record = leads.suppress(record_id)
+            except LookupError as exc:
+                return {"ok": False, "error": str(exc)}
+            return {"ok": True, "lead": record.to_dict()}
+
+    def unsuppress_lead(self, record_id: str) -> dict[str, Any]:
+        with LeadRepository(data_dir()) as leads:
+            try:
+                record = leads.unsuppress(record_id)
+            except LookupError as exc:
+                return {"ok": False, "error": str(exc)}
+            return {"ok": True, "lead": record.to_dict()}
+
+    def export_leads(self) -> dict[str, Any]:
+        campaign = load_settings().active_profile
+        destination = data_dir() / f"{campaign}_leads.csv"
+        with LeadRepository(data_dir()) as leads:
+            path = leads.export_csv(destination, campaign=campaign)
+        return {"ok": True, "path": str(path)}
 
     def save_settings(self, data: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -316,7 +357,10 @@ class Api:
             lines = list(self._lines)
             self._lines.clear()
             review = dict(self._review) if self._review is not None else None
-        return {"lines": lines, "running": self._is_running(), "review": review}
+        settings = load_settings()
+        with LeadRepository(data_dir()) as leads:
+            lead_metrics = leads.metrics(settings.active_profile)
+        return {"lines": lines, "running": self._is_running(), "review": review, "lead_metrics": lead_metrics}
 
 
 def _first_error(exc: ValidationError) -> str:

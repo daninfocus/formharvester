@@ -517,6 +517,65 @@ input[type="checkbox"] { accent-color: var(--accent); width: auto; }
   align-items: end;
 }
 
+.policy-grid { margin-top: 0.85rem; }
+.policy-tech-grid { margin-top: 0.85rem; }
+
+/* --- lead intelligence ----------------------------------------------- */
+
+.lead-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(5, 6, 10, 0.42);
+}
+
+.metric strong { color: var(--accent); font-size: 1.05rem; }
+.metric span { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; }
+
+.lead-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.lead-toolbar label { min-width: 180px; }
+
+.lead-cards { display: grid; gap: 0.7rem; }
+
+.lead-card {
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(5, 6, 10, 0.38);
+}
+
+.lead-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.lead-card-title { color: var(--fg); font-weight: 700; word-break: break-all; }
+.lead-card-meta { color: var(--muted); font-size: 0.72rem; }
+.lead-card-score { color: var(--accent); font-size: 1rem; font-weight: 700; white-space: nowrap; }
+.lead-card-details { display: grid; gap: 0.25rem; margin-top: 0.65rem; color: var(--muted); font-size: 0.72rem; }
+.lead-card-details strong { color: var(--fg); font-weight: 400; }
+.lead-card-actions { margin-top: 0.7rem; }
+.lead-card .status-badge { margin-left: 0.4rem; }
+
 button.btn.danger { color: var(--danger); }
 button.btn.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
 
@@ -664,6 +723,9 @@ footer {
   .campaign-run-actions .btn, .campaign-create .btn, .campaign-admin-actions .btn { width: 100%; }
   .campaign-admin-actions { flex-direction: column; align-items: stretch; }
   .content-fields-grid { grid-template-columns: 1fr; }
+  .lead-metrics { grid-template-columns: repeat(2, 1fr); }
+  .lead-toolbar { align-items: stretch; flex-direction: column; }
+  .lead-toolbar label { min-width: 0; }
   .inline-warning { align-items: flex-start; flex-wrap: wrap; }
   .warning-action { width: 100%; margin-left: 1.7rem; }
   .autosave-status { margin-left: auto; }
