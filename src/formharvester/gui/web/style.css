@@ -21,6 +21,7 @@
 html, body {
   margin: 0;
   height: 100%;
+  overflow: hidden;
   background: var(--bg);
   color: var(--fg);
   font-family: ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
@@ -176,7 +177,10 @@ nav button.active .nav-icon { opacity: 1; }
 
 main {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: 1.25rem;
   width: 100%;
 }
