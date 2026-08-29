@@ -357,7 +357,7 @@ This keeps the desktop package self-contained and avoids per-lookup API costs.
 An external provider can be added later behind an optional provider interface if
 broader coverage is needed.
 
-## Package layout (2.4.2)
+## Package layout (3.0.0)
 
 ```
 src/formharvester/
