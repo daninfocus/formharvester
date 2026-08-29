@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from formharvester.cli.app import Bot
 from formharvester.core import __VERSION__
+from formharvester.health import check_captcha_health, check_llm_health
 from formharvester.leads import LeadRepository
 from formharvester.llm import GeneratedFormContent, ReviewCallback
 from formharvester.settings import (
@@ -83,10 +84,53 @@ class Api:
         self._review: dict[str, str] | None = None
         self._review_event: threading.Event | None = None
         self._review_decision: object = _UNDECIDED
+        self._health_lock = threading.Lock()
+        self._health_thread: threading.Thread | None = None
+        self._health_checked_at = 0.0
+        self._health: dict[str, dict[str, str]] = {
+            "llm": {"name": "LLM", "state": "checking", "detail": "checking..."},
+            "captcha": {"name": "CAPTCHA", "state": "checking", "detail": "checking..."},
+        }
 
     def _emit(self, line: str) -> None:
         with self._lock:
             self._lines.append(line)
+
+    # --- external service health ---------------------------------------
+
+    def get_health(self) -> dict[str, dict[str, str]]:
+        """Return cached health and refresh it in the background when stale."""
+        with self._health_lock:
+            stale = time.monotonic() - self._health_checked_at >= 30
+            running = self._health_thread is not None and self._health_thread.is_alive()
+            if stale and not running:
+                self._health = {
+                    "llm": {"name": "LLM", "state": "checking", "detail": "checking..."},
+                    "captcha": {"name": "CAPTCHA", "state": "checking", "detail": "checking..."},
+                }
+                self._health_thread = threading.Thread(target=self._refresh_health, daemon=True)
+                self._health_thread.start()
+            return {name: dict(value) for name, value in self._health.items()}
+
+    def _refresh_health(self) -> None:
+        settings = load_settings()
+        try:
+            result = {
+                "llm": check_llm_health(settings.llm),
+                "captcha": check_captcha_health(settings.captcha),
+            }
+        except Exception as exc:
+            result = {
+                "llm": {"name": "LLM", "state": "warning", "detail": f"check failed: {exc}"},
+                "captcha": {"name": "CAPTCHA", "state": "warning", "detail": "check failed"},
+            }
+        with self._health_lock:
+            self._health = result
+            self._health_checked_at = time.monotonic()
+
+    def _invalidate_health(self) -> None:
+        with self._health_lock:
+            self._health_checked_at = 0
 
     # --- state ----------------------------------------------------------
 
@@ -103,6 +147,7 @@ class Api:
             "running": self._is_running(),
             "review": self._review_snapshot(),
             "lead_metrics": lead_metrics,
+            "health": self.get_health(),
         }
 
     def get_leads(self, status: str | None = None) -> dict[str, Any]:
@@ -146,6 +191,7 @@ class Api:
             save_settings(Settings.model_validate(data))
         except ValidationError as exc:
             return {"ok": False, "error": _first_error(exc)}
+        self._invalidate_health()
         return {"ok": True}
 
     def save_profile(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -360,7 +406,13 @@ class Api:
         settings = load_settings()
         with LeadRepository(data_dir()) as leads:
             lead_metrics = leads.metrics(settings.active_profile)
-        return {"lines": lines, "running": self._is_running(), "review": review, "lead_metrics": lead_metrics}
+        return {
+            "lines": lines,
+            "running": self._is_running(),
+            "review": review,
+            "lead_metrics": lead_metrics,
+            "health": self.get_health(),
+        }
 
 
 def _first_error(exc: ValidationError) -> str:

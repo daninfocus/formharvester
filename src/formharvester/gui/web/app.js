@@ -291,6 +291,7 @@ function render() {
   updateConditionalFields();
   renderPolicyState();
   renderLeadMetrics(state.lead_metrics || {});
+  renderHealth(state.health || {});
 }
 
 function renderPolicyState() {
@@ -312,6 +313,22 @@ function renderLeadMetrics(metrics) {
   if ($("#metric-qualified")) $("#metric-qualified").textContent = values.qualified;
   if ($("#metric-submitted")) $("#metric-submitted").textContent = values.submitted;
   if ($("#metric-average")) $("#metric-average").textContent = values.average_score;
+}
+
+function renderHealth(health) {
+  const labels = { llm: "LLM", captcha: "CAPTCHA" };
+  for (const [key, label] of Object.entries(labels)) {
+    const chip = $("#" + key + "-health");
+    if (!chip) continue;
+    const result = health?.[key] || { state: "checking", detail: "checking..." };
+    const stateName = ["ok", "warning", "checking", "disabled"].includes(result.state)
+      ? result.state
+      : "warning";
+    chip.classList.remove("ok", "warning", "checking", "disabled");
+    chip.classList.add(stateName);
+    chip.title = label + ": " + (result.detail || "unknown");
+    chip.setAttribute("aria-label", chip.title);
+  }
 }
 
 function appendLeadDetail(container, label, value) {
@@ -474,9 +491,10 @@ async function start() {
 
 async function poll() {
   if (!window.pywebview) return;
-  const { lines, running, review, lead_metrics } = await window.pywebview.api.poll();
+  const { lines, running, review, lead_metrics, health } = await window.pywebview.api.poll();
   appendLines(lines);
   renderLeadMetrics(lead_metrics || {});
+  renderHealth(health || {});
   setRunning(running);
   renderReview(review);
 }

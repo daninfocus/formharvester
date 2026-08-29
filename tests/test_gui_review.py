@@ -149,3 +149,40 @@ def test_gui_lead_queue_lists_suppresses_and_exports(tmp_path, monkeypatch) -> N
     assert api.suppress_lead(record.id)["ok"] is True
     assert api.get_leads("SUPPRESSED")["leads"][0]["suppressed"] is True
     assert api.export_leads()["ok"] is True
+
+
+def test_gui_health_refreshes_in_background_and_caches_result(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("FORMHARVESTER_HOME", str(tmp_path))
+    calls: list[str] = []
+
+    def llm_health(_settings) -> dict[str, str]:
+        calls.append("llm")
+        return {"name": "LLM", "state": "ok", "detail": "openai: ready"}
+
+    def captcha_health(_settings) -> dict[str, str]:
+        calls.append("captcha")
+        return {"name": "CAPTCHA", "state": "disabled", "detail": "not configured"}
+
+    monkeypatch.setattr("formharvester.gui.api.check_llm_health", llm_health)
+    monkeypatch.setattr("formharvester.gui.api.check_captcha_health", captcha_health)
+    api = Api()
+
+    initial = api.get_health()
+    assert initial["llm"]["state"] == "checking"
+    assert initial["captcha"]["state"] == "checking"
+
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        refreshed = api.get_health()
+        if refreshed["llm"]["state"] != "checking":
+            break
+        time.sleep(0.01)
+    else:
+        raise AssertionError("health check did not finish")
+
+    assert refreshed == {
+        "llm": {"name": "LLM", "state": "ok", "detail": "openai: ready"},
+        "captcha": {"name": "CAPTCHA", "state": "disabled", "detail": "not configured"},
+    }
+    assert calls == ["llm", "captcha"]
+    assert api.get_health() == refreshed
