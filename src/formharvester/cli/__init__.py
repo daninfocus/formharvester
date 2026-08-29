@@ -128,11 +128,13 @@ def discover(
 
 
 @cli.command()
-def gui() -> None:
+def gui(
+    dev: Annotated[bool, typer.Option(help="Show advanced developer-only settings.")] = False,
+) -> None:
     """Open the desktop interface."""
     from formharvester.gui import launch
 
-    launch()
+    launch(dev=dev)
 
 
 settings_app = typer.Typer(help="Inspect and change saved settings.", no_args_is_help=True)

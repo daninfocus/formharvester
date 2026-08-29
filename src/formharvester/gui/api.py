@@ -75,7 +75,8 @@ class _GuiBot(Bot):
 
 
 class Api:
-    def __init__(self) -> None:
+    def __init__(self, *, dev_mode: bool = False) -> None:
+        self._dev_mode = dev_mode
         self._lines: deque[str] = deque(maxlen=2000)
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
@@ -148,6 +149,7 @@ class Api:
             "review": self._review_snapshot(),
             "lead_metrics": lead_metrics,
             "health": self.get_health(),
+            "dev_mode": self._dev_mode,
         }
 
     def get_leads(self, status: str | None = None) -> dict[str, Any]:
@@ -274,6 +276,10 @@ class Api:
             return {"ok": False, "error": "A harvest is already running."}
 
         settings = load_settings()
+        if not self._dev_mode and settings.engine.debug_form:
+            settings = settings.model_copy(
+                update={"engine": settings.engine.model_copy(update={"debug_form": False})}
+            )
         profile = load_profile(settings.active_profile)
         if not profile.queries:
             return {"ok": False, "error": "The selected campaign has no search queries yet."}

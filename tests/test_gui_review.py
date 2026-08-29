@@ -196,3 +196,30 @@ def test_gui_poll_survives_a_transiently_empty_settings_file(tmp_path, monkeypat
 
     assert payload["lead_metrics"] == {}
     assert payload["lines"] == []
+
+
+def test_gui_debug_mode_is_runtime_only_when_dev_flag_is_enabled(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("FORMHARVESTER_HOME", str(tmp_path))
+    save_settings(Settings(active_profile="campaign", engine=EngineSettings(debug_form=True)))
+    save_profile(CampaignProfile(name="campaign", queries=["roofing"]))
+    captured: list[bool] = []
+
+    def fake_run(self, settings, profile) -> None:
+        captured.append(settings.engine.debug_form)
+
+    monkeypatch.setattr(Api, "_run", fake_run)
+    normal_api = Api()
+    dev_api = Api(dev_mode=True)
+
+    assert normal_api.get_state()["dev_mode"] is False
+    assert dev_api.get_state()["dev_mode"] is True
+    assert normal_api.start() == {"ok": True}
+    normal_thread = normal_api._thread
+    assert normal_thread is not None
+    normal_thread.join(timeout=2)
+    assert dev_api.start() == {"ok": True}
+    dev_thread = dev_api._thread
+    assert dev_thread is not None
+    dev_thread.join(timeout=2)
+
+    assert captured == [False, True]

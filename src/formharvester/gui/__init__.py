@@ -14,7 +14,7 @@ __all__ = ["launch"]
 WEB_ROOT = Path(__file__).parent / "web"
 
 
-def launch(on_ready: Callable[[], None] | None = None) -> None:
+def launch(on_ready: Callable[[], None] | None = None, *, dev: bool = False) -> None:
     """Open the FormHarvester window (blocks until it is closed).
 
     ``on_ready`` runs once the window is up. The frozen build uses it to close
@@ -30,7 +30,7 @@ def launch(on_ready: Callable[[], None] | None = None) -> None:
     webview.create_window(
         "FormHarvester",
         str(WEB_ROOT / "index.html"),
-        js_api=Api(),
+        js_api=Api(dev_mode=dev),
         width=1000,
         height=620,
         min_size=(780, 520),

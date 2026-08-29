@@ -257,6 +257,8 @@ function selectPanel(panelName) {
 function render() {
   $("#version").textContent = "v" + state.version;
   $("#home-path").textContent = "config: " + state.home;
+  const devSettings = $("[data-dev-only]");
+  if (devSettings) devSettings.hidden = !state.dev_mode;
 
   renderCampaignSelect("#profile-select");
   renderCampaignSelect("#campaign-editor-select");
