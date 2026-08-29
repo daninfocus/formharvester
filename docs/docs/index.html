@@ -94,7 +94,7 @@
   <aside class="sidebar" aria-label="Documentation sections">
     <div class="sidebar-label">On this page</div>
     <a href="#overview">Overview</a><a href="#install">Install</a><a href="#quick-start">Quick start</a>
-    <a href="#technology-detection">Technology detection</a><a href="#inference">Inference and confidence</a>
+    <a href="#llm">LLM form content</a><a href="#technology-detection">Technology detection</a><a href="#inference">Inference and confidence</a>
     <a href="#api">Library API</a><a href="#cli-gui">CLI and GUI</a><a href="#output">Output files</a>
     <a href="#configuration">Configuration</a><a href="#architecture">Architecture</a><a href="#development">Development</a>
   </aside>
@@ -133,7 +133,34 @@
         <pre><code><span class="command">formharvester profile create roofing</span>
 <span class="command">formharvester profile use roofing</span>
 <span class="command">formharvester run --headless --max-pages 3</span></code></pre>
+        <p>Campaign Search queries are sent to Google. Optional URL filters are matched against the URLs returned by Google; they do not search page content or specifically identify contact pages. Leave them empty to keep all Google result links, subject to normal deduplication and the visited-site filter. This does not mean every hyperlink on Google or every link inside each website.</p>
         <h3>Discover URLs without submitting forms</h3><pre><code><span class="command">formharvester discover "roofing companies austin"</span></code></pre>
+      </section>
+
+        <section id="llm"><h2>LLM form content</h2>
+         <p>FormHarvester can generate the Subject and Message fields with OpenAI, Anthropic, or DeepSeek. Enable <strong>Use LLM-generated content</strong> beside the Subject and Message fields in the Campaigns tab. Configure the provider, model, and API key in Settings.</p>
+         <p>When the toggle is off, Subject and Message contain the exact text that will be submitted. When it is on, the GUI shows separate Subject prompt and Message prompt fields; the direct submission text is preserved, so switching between modes is reversible. The provider returns the final values as a structured JSON object. Other campaign fields continue using the deterministic form-filling rules.</p>
+         <p>If the toggle is enabled without an API key for the selected provider, the GUI shows a warning and directs you to Settings before a run can start.</p>
+        <h3>Safety gates</h3>
+        <table><thead><tr><th>Setting</th><th>Behavior</th></tr></thead><tbody>
+          <tr><td><code>engine.send_form=false</code></td><td>Read-only mode; no form fill, LLM request, or submission.</td></tr>
+          <tr><td>LLM enabled, review disabled</td><td>Successful generated content is submitted automatically when form submission is enabled.</td></tr>
+          <tr><td><code>llm.review_before_submit=true</code></td><td>The GUI pauses with editable Subject and Message fields. Approve submits; Skip never clicks Submit.</td></tr>
+          <tr><td>Provider or parsing failure</td><td>The site receives <code>LLM_ERROR</code> and is never submitted.</td></tr>
+        </tbody></table>
+        <h3>Providers and configuration</h3>
+        <p>The base package uses the existing HTTP dependency and provider-native endpoints: OpenAI Responses, Anthropic Messages, and DeepSeek Chat Completions. No provider SDK is required. Model names are editable because provider catalogs change.</p>
+        <pre><code>"llm": {
+  "enabled": true,
+  "provider": "openai",
+  "model": "gpt-5",
+  "openai_api_key": "YOUR_API_KEY",
+  "review_before_submit": true,
+  "request_timeout": 60
+}</code></pre>
+        <p>API keys are stored in the local settings file, masked in the GUI, and excluded from logs and exports. Provider usage may incur charges. Configured campaign identity fields are sent to the selected provider when generation is enabled.</p>
+        <h3>Prompt context</h3>
+        <p>The shared prompt builder sends the Subject and Message prompts plus structured context: target URL, detected technologies, public emails, configured identity fields, and visible form-field metadata. It does not send raw HTML, cookies, scripts, or page source.</p>
       </section>
 
       <section id="technology-detection"><h2>Technology detection</h2>
@@ -189,8 +216,28 @@ with FormHarvester(
     print(result.status)
     print(result.emails)
     print([technology.name for technology in result.technologies])</code></pre>
-        <p><code>result.status</code> is one of <code>SUBMITTED</code>, <code>FORM_NOT_FOUND</code>, <code>BUTTON_NOT_FOUND</code>, <code>VISITED</code>, or <code>ERROR</code>. Existing status and email behavior is unchanged by technology detection.</p>
+        <p><code>result.status</code> is one of <code>SUBMITTED</code>, <code>FORM_NOT_FOUND</code>, <code>BUTTON_NOT_FOUND</code>, <code>VISITED</code>, <code>LLM_ERROR</code>, <code>REVIEW_SKIPPED</code>, or <code>ERROR</code>. When generation succeeds, <code>result.generated</code> contains the generated Subject and Message plus provider/model metadata.</p>
         <p>Convenience functions <code>harvest_site()</code>, <code>harvest_sites()</code>, and <code>discover_sites()</code> are also available.</p>
+        <h3>LLM generation</h3>
+        <pre><code>from formharvester import FormFillDetails, FormHarvester, HarvesterOptions
+
+details = FormFillDetails(
+    email="jane@example.com",
+    subject="Ask about a website rebuild",
+    message="Write a concise introduction using our frontend experience.",
+)
+options = HarvesterOptions(
+    send_form=True,
+    llm_enabled=True,
+    llm_provider="openai",
+    llm_model="gpt-5",
+    llm_api_key="YOUR_API_KEY",
+)
+
+with FormHarvester(details, options) as fh:
+    result = fh.harvest("https://example.com")
+    print(result.status, result.generated)</code></pre>
+        <p>Library callers can inject an <code>LlmClient</code> for tests or custom providers. Manual review is desktop-GUI-only; enabling <code>llm_review_before_submit</code> in a library run raises a configuration error rather than prompting interactively.</p>
       </section>
 
       <section id="cli-gui"><h2>CLI and GUI</h2>
@@ -199,8 +246,8 @@ with FormHarvester(
 <span class="command">formharvester settings set engine.detect_technologies false</span>
 <span class="command">formharvester profile list</span>
 <span class="command">formharvester run --profile roofing --headless</span></code></pre>
-        <p>The CLI prints a short technology summary after each processed site. Run flags override saved settings for that run.</p>
-        <h3>Desktop GUI</h3><p>Open the Settings tab and use <strong>Detect site technologies</strong>. The Run tab prints a summary for each site while structured records are written to the campaign data directory.</p>
+        <p>The CLI prints a short technology summary after each processed site. Run flags override saved settings for that run. Saved LLM settings are used for normal CLI runs, but CLI execution refuses the GUI-only review mode when submission is enabled.</p>
+        <h3>Desktop GUI</h3><p>Open the Campaigns tab to toggle LLM-generated Subject and Message content and edit either direct text or prompts. Use Settings for technology detection, provider credentials, model selection, and manual review. The Run tab prints per-site progress and pauses with editable generated content when review is enabled.</p>
       </section>
 
       <section id="output"><h2>Output files</h2>
@@ -240,6 +287,11 @@ with FormHarvester(
           <tr><td><code>engine.generate_email_sources</code></td><td>Write the source URL beside each email.</td><td><code>true</code></td></tr>
           <tr><td><code>google.max_pages</code></td><td>Search result pages per query.</td><td><code>3</code></td></tr>
           <tr><td><code>captcha.provider</code></td><td><code>deathbycaptcha</code>, <code>2captcha</code>, <code>none</code>, or blank.</td><td>blank</td></tr>
+          <tr><td><code>llm.enabled</code></td><td>Use campaign Subject and Message as LLM prompts.</td><td><code>false</code></td></tr>
+          <tr><td><code>llm.provider</code></td><td><code>openai</code>, <code>anthropic</code>, or <code>deepseek</code>.</td><td><code>openai</code></td></tr>
+          <tr><td><code>llm.model</code></td><td>Editable provider model name.</td><td><code>gpt-5</code></td></tr>
+          <tr><td><code>llm.review_before_submit</code></td><td>Require GUI approval and allow editing before submission.</td><td><code>false</code></td></tr>
+          <tr><td><code>llm.request_timeout</code></td><td>Maximum provider request duration in seconds.</td><td><code>60</code></td></tr>
         </tbody></table>
         <p>Set <code>FORMHARVESTER_HOME</code> to move configuration, profiles, data, and logs to another directory.</p>
       </section>
@@ -252,11 +304,12 @@ Selenium Chrome session
       ├── email extraction
       ├── technology signal capture
       │     └── local fingerprint rules
+      ├── optional LLM Subject/Message generation
       └── optional form fill/submit
       ↓
 HarvestResult + campaign output files</code></pre>
         <p>The detector is intentionally separate from the form handler. If a page exposes no technology signal, or if browser performance logs are unavailable, normal harvesting continues with HTML, DOM, and resource signals.</p>
-        <p>FormHarvester does not require Wappalyzer, a hosted technology API, or a browser extension. An external provider can be added later without changing the result shape.</p>
+        <p>FormHarvester does not require Wappalyzer, a hosted technology API, or a browser extension. LLM providers are isolated behind a normalized client interface, so an additional provider can be added without changing the form handler or result shape.</p>
       </section>
 
       <section id="development"><h2>Development</h2>

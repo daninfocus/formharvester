@@ -11,6 +11,8 @@ from urllib.parse import urljoin
 
 from selenium.webdriver.common.keys import Keys
 
+from formharvester.llm import GeneratedFormContent, LlmError
+
 if TYPE_CHECKING:
     from formharvester._typing import EngineProtocol as _Base
 else:
@@ -212,6 +214,54 @@ class FormHandlerMixin(_Base):
             self.press_key(Keys.ESCAPE)
             time.sleep(1)
 
+    @staticmethod
+    def _field_attributes(element):
+        """Return non-content form metadata suitable for an LLM prompt."""
+        attributes = {}
+        for name in ("tagName", "type", "name", "id", "placeholder", "aria-label"):
+            try:
+                value = element.tag_name if name == "tagName" else element.get_attribute(name)
+            except Exception:
+                value = ""
+            if value:
+                attributes[name.lower().replace("-", "_")] = value
+        return attributes
+
+    def _form_context(self, url, inputs):
+        fields = [self._field_attributes(element) for element in inputs]
+        fields.extend(self._field_attributes(element) for element in self.css("textarea", getall=True) or [])
+        technologies = [
+            {"name": item.name, "category": item.category, "version": item.version}
+            for item in getattr(self, "technologies", [])
+        ]
+        public_emails = sorted({email for email, _source in getattr(self, "scraped_emails", set())})
+        campaign = {
+            key: self.details.get(key, "")
+            for key in ("first_name", "last_name", "phone", "email", "location", "city", "state")
+        }
+        return {
+            "target_url": url,
+            "detected_technologies": technologies,
+            "public_emails": public_emails,
+            "campaign": campaign,
+            "form_fields": fields,
+        }
+
+    def _generate_form_content(self, url, inputs) -> GeneratedFormContent | None:
+        client = getattr(self, "llm_client", None)
+        if not getattr(self, "llm_enabled", False) or client is None:
+            return None
+        try:
+            return client.generate(
+                self.details.get("subject", ""),
+                self.details.get("message", ""),
+                self._form_context(url, inputs),
+            )
+        except LlmError:
+            raise
+        except Exception as exc:
+            raise LlmError(f"LLM generation failed: {exc}") from exc
+
     def process_url(self, url):
         time.sleep(1)
         self.bot_print(url)
@@ -220,6 +270,8 @@ class FormHandlerMixin(_Base):
         # Technology matches belong to one target site.  The detector is
         # passive and must never prevent the existing harvest flow.
         self.technologies = []
+        self.generated_content = None
+        self.llm_error = None
         self.name_filled = False
         self.scraped_emails = set()
         self.visited_links.clear()
@@ -271,6 +323,49 @@ class FormHandlerMixin(_Base):
             return True
 
         if inputs:
+            if getattr(self, "llm_enabled", False):
+                try:
+                    generated = self._generate_form_content(url, inputs)
+                except LlmError as exc:
+                    self.llm_error = str(exc)
+                    self.bot_print(f"LLM error: {self.llm_error}")
+                    self._set_status(url, "LLM_ERROR")
+                    return False
+
+                if generated is not None:
+                    self.generated_content = generated
+                    if getattr(self, "review_before_submit", False):
+                        callback = getattr(self, "review_callback", None)
+                        if callback is None:
+                            self.llm_error = "Manual LLM review is unavailable in this interface."
+                            self.bot_print(f"LLM error: {self.llm_error}")
+                            self._set_status(url, "LLM_ERROR")
+                            return False
+                        try:
+                            reviewed = callback(url, generated)
+                        except Exception as exc:
+                            self.llm_error = f"Manual LLM review failed: {exc}"
+                            self.bot_print(f"LLM error: {self.llm_error}")
+                            self._set_status(url, "LLM_ERROR")
+                            return False
+                        if reviewed is None:
+                            self._set_status(url, "REVIEW_SKIPPED")
+                            return True
+                        if not isinstance(reviewed, GeneratedFormContent):
+                            self.llm_error = "Manual review returned invalid content."
+                            self.bot_print(f"LLM error: {self.llm_error}")
+                            self._set_status(url, "LLM_ERROR")
+                            return False
+                        if not reviewed.subject.strip() or not reviewed.message.strip():
+                            self.llm_error = "Manual review returned empty content."
+                            self.bot_print(f"LLM error: {self.llm_error}")
+                            self._set_status(url, "LLM_ERROR")
+                            return False
+                        generated = reviewed
+                        self.generated_content = reviewed
+                    self.details["subject"] = generated.subject
+                    self.details["message"] = generated.message
+
             # Fill text/email inputs
             for i in inputs:
                 if i.get_attribute("type") in ["text", "email", "tel"]:

@@ -66,8 +66,15 @@ Scraped emails, progress files and error logs are written to `data/` and
 ### From the GUI
 
 `formharvester gui` opens three tabs: **Run** picks the active campaign and
-streams the live console, **Campaign** edits the form-fill details and query
-list, **Settings** covers the engine, search pacing and the captcha solver.
+streams the live console, **Campaigns** edits and manages campaign details and
+query lists, and **Settings** covers the engine, search pacing, captcha solver,
+and LLM provider configuration. The Campaigns tab controls whether a campaign
+uses direct text or LLM-generated form content.
+
+Campaign **Search queries** are sent to Google. Optional **URL filters** are
+matched against the URLs returned by Google; they do not search page content or
+specifically identify contact pages. Leave them empty to keep all Google result
+links, subject to normal deduplication and the visited-site filter.
 
 ### From the CLI
 
@@ -106,6 +113,40 @@ Flags on `run` override the saved settings for that run only.
 | `captcha.provider` | `deathbycaptcha`, `2captcha`, `none`, or blank to auto-detect from the credentials you filled in. |
 | `captcha.twocaptcha_api_key` | 2captcha API key. |
 | `captcha.dbc_username` / `captcha.dbc_password` | DeathByCaptcha credentials. |
+| `llm.enabled` | Generate Subject and Message from the selected campaign's saved prompt fields. Disabled by default. |
+| `llm.provider` | `openai`, `anthropic`, or `deepseek`. |
+| `llm.model` | Provider model name; editable because model catalogs change. |
+| `llm.*_api_key` | API key for the selected provider. Keys stay in local settings and are never logged or exported. |
+| `llm.review_before_submit` | In the desktop GUI, pause with editable generated content and require approval before submitting. |
+| `llm.request_timeout` | Maximum seconds for a provider request. |
+
+### LLM form content
+
+In the GUI, enable **Use LLM-generated content** beside the Subject and Message
+fields in the Campaigns tab. When it is off, those fields contain the exact text
+that will be submitted. When it is on, they become separate **Subject prompt**
+and **Message prompt** fields; the direct submission text is preserved, so
+switching modes is reversible without copying text. Provider, model, review,
+and API-key settings remain in the Settings tab.
+
+The LLM returns the final Subject and Message as structured JSON; the other
+form fields continue using the existing deterministic profile values. If the
+toggle is on without a key for the selected provider, the GUI warns you and
+directs you to Settings before a run can start.
+
+Generation and submission are separate safety gates. `engine.send_form=false`
+remains read-only and avoids the LLM call. With submission enabled, disabling
+**Review generated content before submitting** submits successful output
+automatically. Enabling review pauses the desktop app with editable Subject and
+Message fields and requires **Approve and submit**; **Skip** never clicks the
+site's submit button. If a provider request or response fails, the site is
+marked `LLM_ERROR` and is never submitted.
+
+The prompt includes only structured context: the target URL, detected
+technologies, public emails, configured identity fields, and visible form
+field metadata. It does not send raw HTML, cookies, scripts, or page source.
+Provider usage can incur charges, and configured campaign identity details are
+sent to the selected provider when generation is enabled.
 
 ## Programmatic use (library API)
 
@@ -132,12 +173,43 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
 ```
 
 `result.status` is one of `SUBMITTED`, `FORM_NOT_FOUND`, `BUTTON_NOT_FOUND`,
-`VISITED`, or `ERROR` - the same tokens the CLI writes to its progress file.
+`VISITED`, `LLM_ERROR`, `REVIEW_SKIPPED`, or `ERROR` - the same tokens the CLI
+writes to its progress file. When generation succeeds, `result.generated`
+contains the generated Subject and Message plus provider/model metadata.
 One-shot helpers `harvest_site(url, details)` and `harvest_sites(urls, details)`
 are also available.
 
 `discover()` raises `CaptchaError` rather than blocking; set
 `HarvesterOptions.captcha_sleep` to wait it out instead.
+
+For library use, inject a provider client or configure one explicitly:
+
+```python
+from formharvester import FormFillDetails, FormHarvester, HarvesterOptions
+
+details = FormFillDetails(
+    email="jane@example.com",
+    subject="Ask about a website rebuild",
+    message="Write a concise introduction using our frontend experience.",
+)
+
+options = HarvesterOptions(
+    send_form=True,
+    llm_enabled=True,
+    llm_provider="openai",
+    llm_model="gpt-5",
+    llm_api_key="YOUR_API_KEY",
+)
+
+with FormHarvester(details, options) as fh:
+    result = fh.harvest("https://example.com")
+    print(result.status, result.generated)
+```
+
+Manual review is a desktop-GUI workflow. A library caller that enables
+`llm_review_before_submit` with submission enabled receives a configuration
+error instead of an interactive prompt; use an injected client for automated
+library workflows.
 
 ## Technology detection and inference
 
@@ -252,6 +324,7 @@ src/formharvester/
 ├── scraper/             # web search + email scraping
 ├── form_handler/        # contact-page discovery, field fill, submit
 ├── captcha/             # solver providers (DeathByCaptcha, 2captcha) + detection
+├── llm/                 # provider-neutral form-content generation
 ├── settings.py          # JSON settings, profiles and file locations
 ├── cli/                 # typer commands (`formharvester`)
 ├── gui/                 # pywebview desktop app (web/ holds its HTML, CSS, JS)

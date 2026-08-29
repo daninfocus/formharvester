@@ -159,7 +159,7 @@ def settings_set(
     settings = load_settings()
     section, _, field = key.partition(".")
     if not field or not hasattr(settings, section):
-        typer.echo(f"Unknown key '{key}'. Use one of: engine.*, google.*, captcha.*")
+        typer.echo(f"Unknown key '{key}'. Use one of: engine.*, google.*, captcha.*, llm.*")
         raise typer.Exit(code=1)
 
     if not hasattr(getattr(settings, section), field):

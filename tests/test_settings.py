@@ -28,6 +28,10 @@ def test_settings_round_trip(tmp_path):
     settings.engine.headless = True
     settings.google.max_pages = 9
     settings.captcha.provider = "2captcha"
+    settings.llm.enabled = True
+    settings.llm.provider = "deepseek"
+    settings.llm.model = "deepseek-v4-flash"
+    settings.llm.deepseek_api_key = "secret"
     save_settings(settings, tmp_path)
 
     loaded = load_settings(tmp_path)
@@ -35,6 +39,10 @@ def test_settings_round_trip(tmp_path):
     assert loaded.engine.headless is True
     assert loaded.google.max_pages == 9
     assert loaded.captcha.provider == "2captcha"
+    assert loaded.llm.enabled is True
+    assert loaded.llm.provider == "deepseek"
+    assert loaded.llm.model == "deepseek-v4-flash"
+    assert loaded.llm.api_key_for_provider() == "secret"
 
 
 def test_missing_settings_file_yields_defaults(tmp_path):
@@ -57,6 +65,38 @@ def test_missing_profile_returns_empty_named_profile(tmp_path):
     profile = load_profile("nope", tmp_path)
     assert profile.name == "nope"
     assert profile.queries == []
+
+
+def test_legacy_campaign_text_is_seeded_as_llm_prompt():
+    profile = CampaignProfile.model_validate(
+        {
+            "name": "legacy",
+            "form_fill": {
+                "subject": "Submitted subject",
+                "message": "Submitted message",
+            },
+        }
+    )
+
+    assert profile.form_fill.subject == "Submitted subject"
+    assert profile.form_fill.message == "Submitted message"
+    assert profile.form_fill.subject_prompt == "Submitted subject"
+    assert profile.form_fill.message_prompt == "Submitted message"
+
+
+def test_campaign_can_keep_direct_text_and_llm_prompt_separately():
+    form_fill = FormFill(
+        subject="Submitted subject",
+        message="Submitted message",
+        subject_prompt="Ask about their services",
+        message_prompt="Write a concise introduction.",
+    )
+
+    assert form_fill.as_engine_details()["subject"] == "Submitted subject"
+    assert form_fill.as_engine_details()["subject_prompt"] == "Ask about their services"
+    assert form_fill.as_engine_details()["message_prompt"] == "Write a concise introduction."
+    assert form_fill.as_engine_details(llm_enabled=True)["subject"] == "Ask about their services"
+    assert form_fill.as_engine_details(llm_enabled=True)["message"] == "Write a concise introduction."
 
 
 def test_list_profiles_is_empty_before_anything_is_saved(tmp_path):

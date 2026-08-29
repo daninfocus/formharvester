@@ -27,6 +27,7 @@ from rich.console import Console
 from formharvester.captcha import create_solver
 from formharvester.captcha.base import CaptchaSolver
 from formharvester.core import HarvesterCore
+from formharvester.llm import GeneratedFormContent, LlmClient, LlmError, create_llm_client
 from formharvester.scraper import GoogleSearchMixin
 from formharvester.technology import TechnologyEvidence, TechnologyMatch
 
@@ -34,9 +35,12 @@ __all__ = [
     "FormFillDetails",
     "FormHarvester",
     "CaptchaError",
+    "GeneratedFormContent",
     "HarvestResult",
     "HarvestStatus",
     "HarvesterOptions",
+    "LlmClient",
+    "LlmError",
     "TechnologyEvidence",
     "TechnologyMatch",
     "discover_sites",
@@ -55,6 +59,8 @@ HarvestStatus = Literal[
     "FORM_NOT_FOUND",
     "BUTTON_NOT_FOUND",
     "VISITED",
+    "LLM_ERROR",
+    "REVIEW_SKIPPED",
     "ERROR",
 ]
 
@@ -100,6 +106,13 @@ class HarvesterOptions:
     max_time: int = 30
     debug: bool = False
     detect_technologies: bool = True
+    llm_enabled: bool = False
+    llm_client: LlmClient | None = None
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    llm_api_key: str | None = None
+    llm_request_timeout: int = 60
+    llm_review_before_submit: bool = False
     captcha_solver: CaptchaSolver | None = None
     captcha_provider: str | None = None
     dbc_username: str | None = None
@@ -134,6 +147,8 @@ class HarvestResult:
     status: HarvestStatus
     emails: list[str] = field(default_factory=list)
     technologies: list[TechnologyMatch] = field(default_factory=list)
+    generated: GeneratedFormContent | None = None
+    llm_error: str | None = None
 
     @property
     def submitted(self) -> bool:
@@ -186,6 +201,18 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
         self.send_form = opts.send_form
         self.DEBUG = opts.debug
         self.detect_technologies = opts.detect_technologies
+        self.llm_enabled = opts.llm_enabled or opts.llm_client is not None
+        self.llm_client = opts.llm_client
+        if self.llm_enabled and self.send_form and self.llm_client is None:
+            self.llm_client = create_llm_client(
+                opts.llm_provider or "openai",
+                opts.llm_api_key or "",
+                opts.llm_model or "gpt-5",
+                timeout=opts.llm_request_timeout,
+            )
+        self.review_before_submit = bool(self.llm_enabled and opts.llm_review_before_submit and not self.DEBUG)
+        if self.review_before_submit and self.send_form:
+            raise ValueError("Manual LLM review is available through the desktop GUI only.")
         self.max_time = opts.max_time
         self.HEADLESS = opts.headless
         self.DEV_SETTINGS = False
@@ -198,6 +225,8 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
         self.crawl = True
         self.threads: list[threading.Thread] = []
         self.last_status: str | None = None
+        self.generated_content: GeneratedFormContent | None = None
+        self.llm_error: str | None = None
 
         self.skip_ads = opts.skip_ads
         self.start_page = opts.start_page
@@ -284,6 +313,8 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
         self.last_status = None
         self.scraped_emails = set()
         self.technologies = []
+        self.generated_content = None
+        self.llm_error = None
         self.visited_links = []
         self.name_filled = False
         self.crawl = True
@@ -303,7 +334,14 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
 
         status: HarvestStatus = self.last_status or "ERROR"  # type: ignore[assignment]
         emails = sorted({email for (email, _url) in self.scraped_emails})
-        return HarvestResult(url=url, status=status, emails=emails, technologies=list(self.technologies))
+        return HarvestResult(
+            url=url,
+            status=status,
+            emails=emails,
+            technologies=list(self.technologies),
+            generated=self.generated_content,
+            llm_error=self.llm_error,
+        )
 
     def harvest_many(self, urls: Iterable[str]) -> Iterator[HarvestResult]:
         for url in urls:

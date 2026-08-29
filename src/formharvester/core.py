@@ -72,6 +72,12 @@ class HarvesterCore(SeleniumBot, CaptchaMixin, EmailScraperMixin, FormHandlerMix
     max_time = 30
     crawl = True
     detect_technologies = True
+    llm_enabled = False
+    llm_client = None
+    review_before_submit = False
+    review_callback = None
+    generated_content = None
+    llm_error = None
 
     def bot_print(self, message: object, is_input: bool = False, figlet: bool = False) -> None:
         if figlet:

@@ -22,6 +22,7 @@ from typing import Any, Protocol
 from selenium import webdriver
 
 from formharvester.captcha.base import CaptchaSolver
+from formharvester.llm import GeneratedFormContent, LlmClient, ReviewCallback
 from formharvester.technology import TechnologyMatch
 
 
@@ -50,6 +51,12 @@ class EngineProtocol(Protocol):
     visited_websites: list[str]
     technologies: list[TechnologyMatch]
     detect_technologies: bool
+    llm_enabled: bool
+    llm_client: LlmClient | None
+    review_before_submit: bool
+    review_callback: ReviewCallback | None
+    generated_content: GeneratedFormContent | None
+    llm_error: str | None
 
     # --- CLI-only config (cli.app.Bot.__init__) ----------------------------
     mode: str

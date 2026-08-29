@@ -2,6 +2,25 @@
 
 let state = null;
 let pollTimer = null;
+let activeReviewId = null;
+let previousLlmProvider = null;
+const autosaveTimers = { settings: null, profile: null };
+const autosaveRequests = { settings: null, profile: null };
+const autosavePending = new Set();
+let autosaveInFlight = 0;
+let autosaveError = false;
+
+const defaultLlmModels = {
+  openai: "gpt-5",
+  anthropic: "claude-sonnet-4-20250514",
+  deepseek: "deepseek-v4-flash",
+};
+
+const llmModelHints = {
+  openai: "OpenAI default: gpt-5",
+  anthropic: "Anthropic default: claude-sonnet-4-20250514",
+  deepseek: "DeepSeek default: deepseek-v4-flash",
+};
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -39,13 +58,180 @@ function writeInput(el, value) {
   else el.value = value == null ? "" : value;
 }
 
-// --- rendering ----------------------------------------------------------
+function renderAutosaveStatus() {
+  const status = $("#autosave-status");
+  const text = $("#autosave-status-text");
+  if (!status || !text) return;
 
-function render() {
-  $("#version").textContent = "v" + state.version;
-  $("#home-path").textContent = "config: " + state.home;
+  let mode = "saved";
+  let message = "All changes saved";
+  if (autosaveInFlight) {
+    mode = "saving";
+    message = "Saving changes…";
+  } else if (autosavePending.size) {
+    mode = "pending";
+    message = "Unsaved changes";
+  } else if (autosaveError) {
+    mode = "error";
+    message = "Save failed";
+  }
+  status.classList.remove("saved", "saving", "pending", "error");
+  status.classList.add(mode);
+  text.textContent = message;
+}
 
-  const select = $("#profile-select");
+function scheduleAutosave(scope) {
+  autosavePending.add(scope);
+  autosaveError = false;
+  renderAutosaveStatus();
+  if (autosaveTimers[scope]) clearTimeout(autosaveTimers[scope]);
+  autosaveTimers[scope] = setTimeout(() => persistAutosave(scope), 650);
+}
+
+async function persistAutosave(scope) {
+  if (autosaveRequests[scope]) return autosaveRequests[scope];
+
+  const task = (async () => {
+    autosaveTimers[scope] = null;
+    if (!state || !autosavePending.has(scope)) {
+      renderAutosaveStatus();
+      return true;
+    }
+
+    autosavePending.delete(scope);
+    autosaveInFlight += 1;
+    renderAutosaveStatus();
+
+    let result;
+    try {
+      result = scope === "settings"
+        ? await window.pywebview.api.save_settings(collectSettings())
+        : await window.pywebview.api.save_profile(collectProfile());
+    } catch (error) {
+      result = { ok: false, error: error?.message || "The settings bridge was unavailable." };
+    }
+
+    if (!result.ok) {
+      autosaveError = true;
+      toast("Autosave failed: " + result.error, true);
+    }
+    autosaveInFlight -= 1;
+    renderAutosaveStatus();
+    return Boolean(result.ok);
+  })();
+
+  autosaveRequests[scope] = task;
+  try {
+    return await task;
+  } finally {
+    if (autosaveRequests[scope] === task) autosaveRequests[scope] = null;
+  }
+}
+
+async function flushAutosave(scope) {
+  if (autosaveTimers[scope]) {
+    clearTimeout(autosaveTimers[scope]);
+    autosaveTimers[scope] = null;
+  }
+  if (autosaveRequests[scope]) {
+    const completed = await autosaveRequests[scope];
+    if (!completed) return false;
+  }
+  if (autosavePending.has(scope)) return persistAutosave(scope);
+  return true;
+}
+
+function bindAutosave() {
+  $$("[data-setting]").forEach((el) => {
+    const eventName = el.type === "checkbox" || el.tagName === "SELECT" ? "change" : "input";
+    el.addEventListener(eventName, () => {
+      scheduleAutosave("settings");
+      if (el.dataset.setting.startsWith("llm.")) updateCampaignContentMode();
+    });
+  });
+  $$("[data-profile], [data-profile-list]").forEach((el) => {
+    el.addEventListener("input", () => scheduleAutosave("profile"));
+  });
+}
+
+function updateCampaignContentMode(seedPrompts = false) {
+  const enabled = Boolean($("#llm-enabled")?.checked);
+  const directFields = $("#direct-content-fields");
+  const promptFields = $("#llm-prompt-fields");
+  const description = $("#content-mode-description");
+  const stateBadge = $("#content-mode-state");
+
+  if (directFields) directFields.hidden = enabled;
+  if (promptFields) promptFields.hidden = !enabled;
+  if (description) {
+    description.textContent = enabled
+      ? "Instructions for the LLM; generated text is submitted."
+      : "Text submitted exactly as written.";
+  }
+  if (stateBadge) {
+    stateBadge.textContent = enabled ? "LLM prompt" : "direct";
+    stateBadge.classList.toggle("on", enabled);
+  }
+
+  if (enabled && seedPrompts) {
+    const directSubject = $('[data-profile="form_fill.subject"]');
+    const directMessage = $('[data-profile="form_fill.message"]');
+    const subjectPrompt = $('[data-profile="form_fill.subject_prompt"]');
+    const messagePrompt = $('[data-profile="form_fill.message_prompt"]');
+    let seeded = false;
+    if (subjectPrompt && !subjectPrompt.value.trim() && directSubject?.value.trim()) {
+      subjectPrompt.value = directSubject.value;
+      seeded = true;
+    }
+    if (messagePrompt && !messagePrompt.value.trim() && directMessage?.value.trim()) {
+      messagePrompt.value = directMessage.value;
+      seeded = true;
+    }
+    if (seeded) scheduleAutosave("profile");
+  }
+
+  const provider = $("#llm-provider")?.value || "openai";
+  const providerNames = { openai: "OpenAI", anthropic: "Anthropic", deepseek: "DeepSeek" };
+  const keyInput = $('[data-setting="llm.' + provider + '_api_key"]');
+  const hasKey = Boolean(keyInput?.value.trim());
+  const warning = $("#llm-key-warning");
+  const warningText = $("#llm-key-warning-text");
+  if (warning) warning.hidden = !enabled || hasKey;
+  if (warningText) {
+    warningText.textContent = (providerNames[provider] || provider) +
+      " API key is not configured. Open Settings before running.";
+  }
+}
+
+function updateConditionalFields() {
+  const llmProvider = $("#llm-provider")?.value || "openai";
+
+  ["openai", "anthropic", "deepseek"].forEach((provider) => {
+    const panel = $("#llm-provider-" + provider);
+    if (panel) panel.hidden = provider !== llmProvider;
+  });
+
+  const modelHint = $("#llm-model-hint");
+  if (modelHint) modelHint.textContent = llmModelHints[llmProvider] || "provider default";
+  const model = $("#llm-model");
+  if (model) model.placeholder = "e.g. " + (defaultLlmModels[llmProvider] || "model-name");
+
+  const captchaProvider = $("#captcha-provider")?.value || "auto";
+  const captchaState = $("#captcha-state");
+  if (captchaState) {
+    captchaState.textContent = captchaProvider === "auto" ? "auto" : captchaProvider;
+    captchaState.classList.toggle("on", captchaProvider !== "none");
+  }
+  ["auto", "2captcha", "deathbycaptcha", "none"].forEach((provider) => {
+    const panel = $("#captcha-provider-" + provider);
+    if (panel) panel.hidden = provider !== captchaProvider;
+  });
+  updateCampaignContentMode();
+}
+
+function renderCampaignSelect(id) {
+  const select = $(id);
+  if (!select) return;
   select.innerHTML = "";
   const names = state.profiles.length ? state.profiles : [state.profile.name];
   for (const name of names) {
@@ -55,12 +241,54 @@ function render() {
     option.selected = name === state.settings.active_profile;
     select.appendChild(option);
   }
+}
+
+function selectPanel(panelName) {
+  $$("nav button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.panel === panelName);
+  });
+  $$(".panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === "panel-" + panelName);
+  });
+}
+
+// --- rendering ----------------------------------------------------------
+
+function render() {
+  $("#version").textContent = "v" + state.version;
+  $("#home-path").textContent = "config: " + state.home;
+
+  renderCampaignSelect("#profile-select");
+  renderCampaignSelect("#campaign-editor-select");
+  const campaignName = $("#campaign-name");
+  if (campaignName) campaignName.value = state.profile.name || "";
+  const campaignExists = state.profiles.includes(state.profile.name);
+  const campaignActionsDisabled = state.running || state.profiles.length <= 1;
+  const renameButton = $("#btn-rename-campaign");
+  const deleteButton = $("#btn-delete-campaign");
+  if (renameButton) renameButton.disabled = state.running || !campaignExists;
+  if (deleteButton) {
+    deleteButton.disabled = campaignActionsDisabled;
+    deleteButton.title = state.profiles.length <= 1
+      ? "Keep at least one campaign configured."
+      : "";
+  }
+  const campaignStatus = $("#campaign-status");
+  const queryCount = (state.profile.queries || []).length;
+  if (campaignStatus) {
+    campaignStatus.textContent = queryCount
+      ? queryCount + " quer" + (queryCount === 1 ? "y" : "ies")
+      : "needs queries";
+    campaignStatus.classList.toggle("on", queryCount > 0);
+  }
 
   $$("[data-setting]").forEach((el) => writeInput(el, get(state.settings, el.dataset.setting)));
   $$("[data-profile]").forEach((el) => writeInput(el, get(state.profile, el.dataset.profile)));
   $$("[data-profile-list]").forEach((el) => {
     el.value = (state.profile[el.dataset.profileList] || []).join("\n");
   });
+  previousLlmProvider = get(state.settings, "llm.provider");
+  updateConditionalFields();
 }
 
 function setRunning(running) {
@@ -68,6 +296,28 @@ function setRunning(running) {
   $("#status-text").textContent = running ? "harvesting" : "idle";
   $("#btn-start").disabled = running;
   $("#btn-stop").disabled = !running;
+}
+
+function renderReview(review) {
+  const dialog = $("#review-dialog");
+  if (!review) {
+    activeReviewId = null;
+    dialog.hidden = true;
+    return;
+  }
+  if (activeReviewId === review.id) return;
+
+  activeReviewId = review.id;
+  $("#review-target").textContent = review.url;
+  $("#review-subject").value = review.subject || "";
+  $("#review-message").value = review.message || "";
+  dialog.hidden = false;
+  $("#review-subject").focus();
+}
+
+function setReviewBusy(busy) {
+  $("#btn-review-skip").disabled = busy;
+  $("#btn-review-approve").disabled = busy;
 }
 
 function appendLines(lines) {
@@ -92,6 +342,7 @@ async function reload() {
   state = await window.pywebview.api.get_state();
   render();
   setRunning(state.running);
+  renderReview(state.review);
 }
 
 function collectSettings() {
@@ -112,20 +363,6 @@ function collectProfile() {
   return next;
 }
 
-async function saveSettings() {
-  const result = await window.pywebview.api.save_settings(collectSettings());
-  if (!result.ok) return toast(result.error, true);
-  await reload();
-  toast("Settings saved.");
-}
-
-async function saveCampaign() {
-  const result = await window.pywebview.api.save_profile(collectProfile());
-  if (!result.ok) return toast(result.error, true);
-  await reload();
-  toast("Campaign saved.");
-}
-
 async function start() {
   const result = await window.pywebview.api.start();
   if (!result.ok) return toast(result.error, true);
@@ -136,25 +373,35 @@ async function start() {
 
 async function poll() {
   if (!window.pywebview) return;
-  const { lines, running } = await window.pywebview.api.poll();
+  const { lines, running, review } = await window.pywebview.api.poll();
   appendLines(lines);
   setRunning(running);
+  renderReview(review);
 }
 
 // --- wiring -------------------------------------------------------------
 
 $$("nav button").forEach((button) => {
-  button.addEventListener("click", () => {
-    $$("nav button").forEach((b) => b.classList.toggle("active", b === button));
-    $$(".panel").forEach((p) => {
-      p.classList.toggle("active", p.id === "panel-" + button.dataset.panel);
-    });
-  });
+  button.addEventListener("click", () => selectPanel(button.dataset.panel));
 });
 
-$("#btn-save-settings").addEventListener("click", saveSettings);
-$("#btn-save-campaign").addEventListener("click", saveCampaign);
 $("#btn-start").addEventListener("click", start);
+
+$("#llm-provider").addEventListener("change", (event) => {
+  const model = $("#llm-model");
+  const oldDefault = defaultLlmModels[previousLlmProvider];
+  if (!model.value.trim() || model.value.trim() === oldDefault) {
+    model.value = defaultLlmModels[event.target.value] || "";
+  }
+  previousLlmProvider = event.target.value;
+  updateConditionalFields();
+});
+
+$("#llm-enabled").addEventListener("change", () => {
+  updateCampaignContentMode(true);
+  updateConditionalFields();
+});
+$("#captcha-provider").addEventListener("change", updateConditionalFields);
 
 $("#btn-stop").addEventListener("click", async () => {
   const result = await window.pywebview.api.stop();
@@ -165,20 +412,82 @@ $("#btn-clear").addEventListener("click", () => {
   $("#console").innerHTML = '<span class="empty">Cleared.</span>';
 });
 
-$("#profile-select").addEventListener("change", async (event) => {
-  await window.pywebview.api.use_profile(event.target.value);
+$("#btn-review-approve").addEventListener("click", async () => {
+  if (!activeReviewId) return;
+  setReviewBusy(true);
+  const result = await window.pywebview.api.approve_review(
+    activeReviewId,
+    $("#review-subject").value,
+    $("#review-message").value,
+  );
+  setReviewBusy(false);
+  if (!result.ok) toast(result.error, true);
+});
+
+$("#btn-review-skip").addEventListener("click", async () => {
+  if (!activeReviewId) return;
+  setReviewBusy(true);
+  const result = await window.pywebview.api.skip_review(activeReviewId);
+  setReviewBusy(false);
+  if (!result.ok) toast(result.error, true);
+});
+
+async function useCampaign(name) {
+  if (!await flushAutosave("profile")) return;
+  const result = await window.pywebview.api.use_profile(name);
+  if (!result.ok) return toast(result.error, true);
   await reload();
-  toast("Switched to " + event.target.value + ".");
+  toast("Now using the " + name + " campaign.");
+}
+
+$("#profile-select").addEventListener("change", (event) => useCampaign(event.target.value));
+$("#campaign-editor-select").addEventListener("change", (event) => useCampaign(event.target.value));
+
+$("#btn-edit-campaign").addEventListener("click", () => selectPanel("campaign"));
+
+$("#btn-new-campaign").addEventListener("click", () => {
+  selectPanel("campaign");
+  $("#new-profile").focus();
+});
+
+$("#btn-open-llm-settings").addEventListener("click", () => {
+  selectPanel("settings");
+  const provider = $("#llm-provider").value || "openai";
+  const keyInput = $('[data-setting="llm.' + provider + '_api_key"]');
+  if (keyInput) keyInput.focus();
 });
 
 $("#btn-create").addEventListener("click", async () => {
   const input = $("#new-profile");
+  if (!await flushAutosave("profile")) return;
   const result = await window.pywebview.api.create_profile(input.value);
   if (!result.ok) return toast(result.error, true);
   input.value = "";
   await reload();
-  toast("Profile created.");
+  toast("Campaign created and selected.");
 });
+
+$("#btn-rename-campaign").addEventListener("click", async () => {
+  const oldName = state.profile.name;
+  const newName = $("#campaign-name").value.trim();
+  if (!await flushAutosave("profile")) return;
+  const result = await window.pywebview.api.rename_profile(oldName, newName);
+  if (!result.ok) return toast(result.error, true);
+  await reload();
+  toast("Campaign renamed to " + newName + ".");
+});
+
+$("#btn-delete-campaign").addEventListener("click", async () => {
+  const name = state.profile.name;
+  if (!window.confirm("Delete the '" + name + "' campaign? This cannot be undone.")) return;
+  if (!await flushAutosave("profile")) return;
+  const result = await window.pywebview.api.delete_profile(name);
+  if (!result.ok) return toast(result.error, true);
+  await reload();
+  toast("Campaign deleted.");
+});
+
+bindAutosave();
 
 window.addEventListener("pywebviewready", async () => {
   await reload();

@@ -19,6 +19,7 @@ from pydantic import ValidationError
 
 from formharvester.cli.app import Bot
 from formharvester.core import __VERSION__
+from formharvester.llm import GeneratedFormContent, ReviewCallback
 from formharvester.settings import (
     CampaignProfile,
     Settings,
@@ -29,8 +30,13 @@ from formharvester.settings import (
     save_profile,
     save_settings,
 )
+from formharvester.settings import (
+    delete_profile as remove_profile,
+)
 
 __all__ = ["Api"]
+
+_UNDECIDED = object()
 
 
 class _GuiBot(Bot):
@@ -42,11 +48,12 @@ class _GuiBot(Bot):
         profile: CampaignProfile,
         sink: Callable[[str], None],
         stop_event: threading.Event,
+        review_callback: ReviewCallback,
     ) -> None:
         # Set before super().__init__: the base constructor already prints.
         self._sink = sink
         self._stop_event = stop_event
-        super().__init__(settings, profile)
+        super().__init__(settings, profile, review_callback=review_callback)
 
     def bot_print(self, message: object, is_input: bool = False, figlet: bool = False) -> None:
         if figlet:
@@ -71,6 +78,9 @@ class Api:
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._bot: _GuiBot | None = None
+        self._review: dict[str, str] | None = None
+        self._review_event: threading.Event | None = None
+        self._review_decision: object = _UNDECIDED
 
     def _emit(self, line: str) -> None:
         with self._lock:
@@ -87,6 +97,7 @@ class Api:
             "home": str(config_home()),
             "version": __VERSION__,
             "running": self._is_running(),
+            "review": self._review_snapshot(),
         }
 
     def save_settings(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -106,12 +117,60 @@ class Api:
 
     def create_profile(self, name: str) -> dict[str, Any]:
         name = name.strip()
-        if not name:
-            return {"ok": False, "error": "Profile name cannot be empty."}
+        name_error = _profile_name_error(name)
+        if name_error:
+            return {"ok": False, "error": name_error}
         if name in list_profiles():
-            return {"ok": False, "error": f"Profile '{name}' already exists."}
+            return {"ok": False, "error": f"Campaign '{name}' already exists."}
         save_profile(CampaignProfile(name=name))
         return self.use_profile(name)
+
+    def rename_profile(self, old_name: str, new_name: str) -> dict[str, Any]:
+        if self._is_running():
+            return {"ok": False, "error": "Stop the harvest before renaming a campaign."}
+
+        old_name = old_name.strip()
+        new_name = new_name.strip()
+        name_error = _profile_name_error(new_name)
+        if name_error:
+            return {"ok": False, "error": name_error}
+        profiles = list_profiles()
+        if old_name not in profiles:
+            return {"ok": False, "error": f"Campaign '{old_name}' was not found."}
+        if new_name in profiles:
+            return {"ok": False, "error": f"Campaign '{new_name}' already exists."}
+        if old_name == new_name:
+            return {"ok": False, "error": "Enter a different campaign name."}
+
+        profile = load_profile(old_name)
+        save_profile(profile.model_copy(update={"name": new_name}))
+        if not remove_profile(old_name):
+            remove_profile(new_name)
+            return {"ok": False, "error": f"Could not remove the old campaign file for '{old_name}'."}
+
+        settings = load_settings()
+        if settings.active_profile == old_name:
+            save_settings(settings.model_copy(update={"active_profile": new_name}))
+        return {"ok": True}
+
+    def delete_profile(self, name: str) -> dict[str, Any]:
+        if self._is_running():
+            return {"ok": False, "error": "Stop the harvest before deleting a campaign."}
+
+        name = name.strip()
+        profiles = list_profiles()
+        if name not in profiles:
+            return {"ok": False, "error": f"Campaign '{name}' was not found."}
+        if len(profiles) <= 1:
+            return {"ok": False, "error": "Keep at least one campaign configured."}
+        if not remove_profile(name):
+            return {"ok": False, "error": f"Could not delete campaign '{name}'."}
+
+        settings = load_settings()
+        if settings.active_profile == name:
+            next_name = next(profile for profile in profiles if profile != name)
+            save_settings(settings.model_copy(update={"active_profile": next_name}))
+        return {"ok": True}
 
     def use_profile(self, name: str) -> dict[str, Any]:
         settings = load_settings()
@@ -130,7 +189,12 @@ class Api:
         settings = load_settings()
         profile = load_profile(settings.active_profile)
         if not profile.queries:
-            return {"ok": False, "error": "This profile has no search queries yet."}
+            return {"ok": False, "error": "The selected campaign has no search queries yet."}
+        if settings.engine.send_form and settings.llm.enabled and not settings.llm.api_key_for_provider().strip():
+            return {
+                "ok": False,
+                "error": f"LLM is enabled, but no {settings.llm.provider} API key is configured in Settings.",
+            }
 
         self._stop.clear()
         with self._lock:
@@ -142,7 +206,13 @@ class Api:
     def _run(self, settings: Settings, profile: CampaignProfile) -> None:
         bot = None
         try:
-            bot = _GuiBot(settings, profile, self._emit, self._stop)
+            bot = _GuiBot(
+                settings,
+                profile,
+                self._emit,
+                self._stop,
+                review_callback=lambda url, content: self._request_review(url, content, self._stop),
+            )
             self._bot = bot
             bot.run()
         except Exception:
@@ -154,6 +224,7 @@ class Api:
                 except Exception:
                     pass
             self._bot = None
+            self._resolve_review(None)
             self._emit("Harvest finished.")
 
     def stop(self) -> dict[str, Any]:
@@ -164,17 +235,103 @@ class Api:
         bot = self._bot
         if bot is not None:
             bot.crawl = False
+        self._resolve_review(None)
         self._emit("Stop requested, finishing the current site...")
+        return {"ok": True}
+
+    # --- manual LLM review ---------------------------------------------
+
+    def _review_snapshot(self) -> dict[str, str] | None:
+        with self._lock:
+            return dict(self._review) if self._review is not None else None
+
+    def _request_review(
+        self,
+        url: str,
+        content: GeneratedFormContent,
+        stop_event: threading.Event,
+    ) -> GeneratedFormContent | None:
+        review_id = f"review-{time.time_ns()}"
+        event = threading.Event()
+        with self._lock:
+            self._review = {
+                "id": review_id,
+                "url": url,
+                "subject": content.subject,
+                "message": content.message,
+                "provider": content.provider,
+                "model": content.model,
+            }
+            self._review_event = event
+            self._review_decision = _UNDECIDED
+        self._emit(f"Review required before submitting {url}")
+
+        while not event.wait(0.2):
+            if stop_event.is_set():
+                self._resolve_review(None, review_id)
+                break
+
+        with self._lock:
+            decision = self._review_decision
+            if self._review is not None and self._review.get("id") == review_id:
+                self._review = None
+                self._review_event = None
+                self._review_decision = _UNDECIDED
+        return decision if isinstance(decision, GeneratedFormContent) else None
+
+    def _resolve_review(self, decision: GeneratedFormContent | None, review_id: str | None = None) -> bool:
+        with self._lock:
+            if self._review is None or (review_id is not None and self._review.get("id") != review_id):
+                return False
+            self._review_decision = decision
+            event = self._review_event
+        if event is not None:
+            event.set()
+        return True
+
+    def approve_review(self, review_id: str, subject: str, message: str) -> dict[str, Any]:
+        with self._lock:
+            review = dict(self._review) if self._review is not None else None
+        if review is None or review.get("id") != review_id:
+            return {"ok": False, "error": "That review is no longer pending."}
+        if not subject.strip() or not message.strip():
+            return {"ok": False, "error": "Subject and message cannot be empty."}
+        content = GeneratedFormContent(
+            subject=subject.strip(),
+            message=message.strip(),
+            provider=review.get("provider", ""),
+            model=review.get("model", ""),
+        )
+        self._resolve_review(content, review_id)
+        return {"ok": True}
+
+    def skip_review(self, review_id: str) -> dict[str, Any]:
+        if not self._resolve_review(None, review_id):
+            return {"ok": False, "error": "That review is no longer pending."}
+        self._emit("Submission skipped by review.")
         return {"ok": True}
 
     def poll(self) -> dict[str, Any]:
         with self._lock:
             lines = list(self._lines)
             self._lines.clear()
-        return {"lines": lines, "running": self._is_running()}
+            review = dict(self._review) if self._review is not None else None
+        return {"lines": lines, "running": self._is_running(), "review": review}
 
 
 def _first_error(exc: ValidationError) -> str:
     error = exc.errors()[0]
     location = ".".join(str(part) for part in error["loc"])
     return f"{location}: {error['msg']}" if location else error["msg"]
+
+
+def _profile_name_error(name: str) -> str | None:
+    if not name:
+        return "Campaign name cannot be empty."
+    if name in {".", ".."} or any(char in name for char in '<>:"/\\|?*') or any(
+        ord(char) < 32 for char in name
+    ):
+        return "Campaign names cannot contain path separators or Windows filename characters."
+    if name.endswith((" ", ".")):
+        return "Campaign names cannot end with a space or period."
+    return None

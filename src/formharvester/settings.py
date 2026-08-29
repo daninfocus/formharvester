@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -20,6 +21,7 @@ __all__ = [
     "EngineSettings",
     "FormFill",
     "GoogleSettings",
+    "LlmSettings",
     "Settings",
     "config_home",
     "data_dir",
@@ -100,11 +102,28 @@ class CaptchaSettings(BaseModel):
     twocaptcha_api_key: str = ""
 
 
+class LlmSettings(BaseModel):
+    """Optional provider settings for Subject and Message generation."""
+
+    enabled: bool = False
+    provider: Literal["openai", "anthropic", "deepseek"] = "openai"
+    model: str = Field(default="gpt-5", min_length=1)
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    deepseek_api_key: str = ""
+    review_before_submit: bool = False
+    request_timeout: int = Field(default=60, ge=5, le=300, description="Seconds allowed for an LLM request")
+
+    def api_key_for_provider(self) -> str:
+        return getattr(self, f"{self.provider}_api_key")
+
+
 class Settings(BaseModel):
     active_profile: str = "default"
     engine: EngineSettings = Field(default_factory=EngineSettings)
     google: GoogleSettings = Field(default_factory=GoogleSettings)
     captcha: CaptchaSettings = Field(default_factory=CaptchaSettings)
+    llm: LlmSettings = Field(default_factory=LlmSettings)
 
 
 class FormFill(BaseModel):
@@ -119,9 +138,28 @@ class FormFill(BaseModel):
     state: str = ""
     subject: str = ""
     message: str = ""
+    subject_prompt: str = ""
+    message_prompt: str = ""
 
-    def as_engine_details(self) -> dict[str, str]:
-        return self.model_dump()
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_llm_prompts(cls, values: object) -> object:
+        """Keep existing campaigns seamless when prompt fields are introduced."""
+        if not isinstance(values, dict):
+            return values
+        migrated = dict(values)
+        if "subject_prompt" not in migrated:
+            migrated["subject_prompt"] = migrated.get("subject", "")
+        if "message_prompt" not in migrated:
+            migrated["message_prompt"] = migrated.get("message", "")
+        return migrated
+
+    def as_engine_details(self, *, llm_enabled: bool = False) -> dict[str, str]:
+        details = self.model_dump()
+        if llm_enabled:
+            details["subject"] = details["subject_prompt"]
+            details["message"] = details["message_prompt"]
+        return details
 
 
 class CampaignProfile(BaseModel):

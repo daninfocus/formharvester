@@ -15,6 +15,7 @@ from rich.console import Console
 from formharvester.captcha import create_solver
 from formharvester.cli.progress import ProgressMixin
 from formharvester.core import __FIGLET__, HarvesterCore
+from formharvester.llm import ReviewCallback, create_llm_client
 from formharvester.scraper import GoogleSearchMixin
 from formharvester.settings import CampaignProfile, Settings, data_dir, log_dir
 from formharvester.utils import get_root_url
@@ -71,6 +72,10 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
             if self.detect_technologies:
                 technologies = ", ".join(item.name for item in self.technologies) or "none detected"
                 self.bot_print(f"Technologies: {technologies}")
+            if self.generated_content is not None:
+                provider = self.generated_content.provider
+                model = self.generated_content.model
+                self.bot_print(f"LLM content generated with {provider}/{model}")
             # Wait for thread to finish
             if self.threads:
                 t = self.threads.pop()
@@ -78,7 +83,12 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
             # Re-enable crawl
             self.crawl = True
 
-    def __init__(self, settings: Settings, profile: CampaignProfile):
+    def __init__(
+        self,
+        settings: Settings,
+        profile: CampaignProfile,
+        review_callback: ReviewCallback | None = None,
+    ):
         pretty.install()
         self.c = Console()
         self.bot_print(__FIGLET__, figlet=True)
@@ -93,6 +103,21 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
         self.generate_email_sources = engine.generate_email_sources
         self.detect_technologies = engine.detect_technologies
         self.max_time = engine.max_time
+        self.review_callback = review_callback
+        self.llm_enabled = bool(self.send_form and settings.llm.enabled)
+        self.llm_client = None
+        if self.llm_enabled:
+            self.llm_client = create_llm_client(
+                settings.llm.provider,
+                settings.llm.api_key_for_provider(),
+                settings.llm.model,
+                timeout=settings.llm.request_timeout,
+            )
+        self.review_before_submit = bool(
+            self.llm_enabled and settings.llm.review_before_submit and not engine.debug_form
+        )
+        if self.review_before_submit and self.review_callback is None:
+            raise ValueError("Manual LLM review is available through the desktop GUI only.")
 
         self.HEADLESS = engine.headless
         self.DEV_SETTINGS = engine.debug_form
@@ -119,7 +144,7 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
 
         self.visited_websites = self.load_txt(self.website_log_file)  # visited urls globally (scraper)
 
-        self.details = profile.form_fill.as_engine_details()
+        self.details = profile.form_fill.as_engine_details(llm_enabled=self.llm_enabled)
         self.google_queries = list(profile.queries)
         self.keywords = list(profile.keywords)
         self.write_progress(self.google_queries, google=True)
