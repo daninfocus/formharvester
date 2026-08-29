@@ -73,6 +73,13 @@ and LLM provider configuration. The Campaigns tab controls whether a campaign
 uses direct text or LLM-generated form content and configures selective
 autopilot safety rules.
 
+The top-right header shows live **LLM** and **CAPTCHA** health indicators. Green
+means the configured provider accepted the credentials and returned a valid
+response; yellow means the provider is missing, unreachable, or rejected the
+credentials; gray means that integration is disabled. Checks run in the
+background, are cached briefly, and do not generate LLM content or submit a
+CAPTCHA.
+
 Campaign **Search queries** are sent to Google. Optional **URL filters** are
 matched against the URLs returned by Google; they do not search page content or
 specifically identify contact pages. Leave them empty to keep all Google result
