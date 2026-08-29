@@ -186,3 +186,13 @@ def test_gui_health_refreshes_in_background_and_caches_result(tmp_path, monkeypa
     }
     assert calls == ["llm", "captcha"]
     assert api.get_health() == refreshed
+
+
+def test_gui_poll_survives_a_transiently_empty_settings_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("FORMHARVESTER_HOME", str(tmp_path))
+    (tmp_path / "formharvester.json").write_text("", encoding="utf-8")
+
+    payload = Api().poll()
+
+    assert payload["lead_metrics"] == {}
+    assert payload["lines"] == []

@@ -10,6 +10,7 @@ objects, so behaviour cannot drift between them.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 from typing import Literal
 
@@ -203,7 +204,7 @@ def save_settings(settings: Settings, home: Path | None = None) -> Path:
     home = home or config_home()
     home.mkdir(parents=True, exist_ok=True)
     path = home / SETTINGS_FILE
-    path.write_text(settings.model_dump_json(indent=2), encoding="utf-8")
+    _atomic_write(path, settings.model_dump_json(indent=2))
     return path
 
 
@@ -225,8 +226,22 @@ def save_profile(profile: CampaignProfile, home: Path | None = None) -> Path:
     directory = profiles_dir(home)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{profile.name}.json"
-    path.write_text(profile.model_dump_json(indent=2), encoding="utf-8")
+    _atomic_write(path, profile.model_dump_json(indent=2))
     return path
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    """Write JSON beside the target, then replace it in one filesystem step."""
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def delete_profile(name: str, home: Path | None = None) -> bool:

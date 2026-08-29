@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+import formharvester.settings as settings_module
 from formharvester.settings import (
     CampaignPolicy,
     CampaignProfile,
@@ -44,6 +45,26 @@ def test_settings_round_trip(tmp_path):
     assert loaded.llm.provider == "deepseek"
     assert loaded.llm.model == "deepseek-v4-flash"
     assert loaded.llm.api_key_for_provider() == "secret"
+
+
+def test_save_settings_replaces_the_file_atomically(tmp_path, monkeypatch):
+    save_settings(Settings(active_profile="before"), tmp_path)
+    real_replace = settings_module.os.replace
+    destination = tmp_path / "formharvester.json"
+    observed = []
+
+    def replace(source, target):
+        observed.append((source, target))
+        assert target == destination
+        assert source != target
+        assert load_settings(tmp_path).active_profile == "before"
+        return real_replace(source, target)
+
+    monkeypatch.setattr(settings_module.os, "replace", replace)
+    save_settings(Settings(active_profile="after"), tmp_path)
+
+    assert observed
+    assert load_settings(tmp_path).active_profile == "after"
 
 
 def test_missing_settings_file_yields_defaults(tmp_path):

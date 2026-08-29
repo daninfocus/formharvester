@@ -113,8 +113,8 @@ class Api:
             return {name: dict(value) for name, value in self._health.items()}
 
     def _refresh_health(self) -> None:
-        settings = load_settings()
         try:
+            settings = load_settings()
             result = {
                 "llm": check_llm_health(settings.llm),
                 "captcha": check_captcha_health(settings.captcha),
@@ -403,7 +403,17 @@ class Api:
             lines = list(self._lines)
             self._lines.clear()
             review = dict(self._review) if self._review is not None else None
-        settings = load_settings()
+        try:
+            settings = load_settings()
+        except (OSError, ValidationError):
+            self._emit("Settings are temporarily unavailable; retrying.")
+            return {
+                "lines": lines,
+                "running": self._is_running(),
+                "review": review,
+                "lead_metrics": {},
+                "health": self.get_health(),
+            }
         with LeadRepository(data_dir()) as leads:
             lead_metrics = leads.metrics(settings.active_profile)
         return {
