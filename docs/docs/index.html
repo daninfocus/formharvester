@@ -94,7 +94,7 @@
   <aside class="sidebar" aria-label="Documentation sections">
     <div class="sidebar-label">On this page</div>
     <a href="#overview">Overview</a><a href="#install">Install</a><a href="#quick-start">Quick start</a>
-    <a href="#llm">LLM form content</a><a href="#technology-detection">Technology detection</a><a href="#inference">Inference and confidence</a>
+    <a href="#llm">LLM form content</a><a href="#lead-intelligence">Lead intelligence</a><a href="#technology-detection">Technology detection</a><a href="#inference">Inference and confidence</a>
     <a href="#api">Library API</a><a href="#cli-gui">CLI and GUI</a><a href="#output">Output files</a>
     <a href="#configuration">Configuration</a><a href="#architecture">Architecture</a><a href="#development">Development</a>
   </aside>
@@ -113,6 +113,7 @@
           <div class="card"><h3>Extract</h3><p>Visit contact pages and landing pages, then collect public email addresses with their source URLs.</p></div>
           <div class="card"><h3>Detect</h3><p>Identify CMSs, frontend frameworks, analytics, payments, hosting, CDNs, and web servers from passive browser-visible evidence.</p></div>
           <div class="card"><h3>Interact</h3><p>Fill and optionally submit contact forms using the form details in the active campaign profile.</p></div>
+          <div class="card"><h3>Qualify</h3><p>Score observable fit signals, apply cooldown and suppression rules, and review every submission decision locally.</p></div>
         </div>
       </section>
 
@@ -134,6 +135,9 @@
 <span class="command">formharvester profile use roofing</span>
 <span class="command">formharvester run --headless --max-pages 3</span></code></pre>
         <p>Campaign Search queries are sent to Google. Optional URL filters are matched against the URLs returned by Google; they do not search page content or specifically identify contact pages. Leave them empty to keep all Google result links, subject to normal deduplication and the visited-site filter. This does not mean every hyperlink on Google or every link inside each website.</p>
+        <h3>Inspect lead intelligence</h3><pre><code><span class="command">formharvester leads list</span>
+<span class="command">formharvester leads metrics</span>
+<span class="command">formharvester leads export --output leads.csv</span></code></pre>
         <h3>Discover URLs without submitting forms</h3><pre><code><span class="command">formharvester discover "roofing companies austin"</span></code></pre>
       </section>
 
@@ -161,6 +165,27 @@
         <p>API keys are stored in the local settings file, masked in the GUI, and excluded from logs and exports. Provider usage may incur charges. Configured campaign identity fields are sent to the selected provider when generation is enabled.</p>
         <h3>Prompt context</h3>
         <p>The shared prompt builder sends the Subject and Message prompts plus structured context: target URL, detected technologies, public emails, configured identity fields, and visible form-field metadata. It does not send raw HTML, cookies, scripts, or page source.</p>
+      </section>
+
+      <section id="lead-intelligence"><h2>Lead intelligence</h2>
+        <p>Each discovered root domain is persisted in the local <code>data/leads.sqlite3</code> database. A lead combines discovery context, contact signals, technology evidence, deterministic qualification, generated drafts, policy decisions, and submission outcomes.</p>
+        <h3>Qualification</h3>
+        <p>The score is explainable and uses observable signals: a contact form contributes 45 points, public email signals contribute 20, and technology evidence contributes up to 20. The Leads tab shows the score and the reasons behind it so a user can judge quality before outreach.</p>
+        <h3>Selective autopilot</h3>
+        <p>Autopilot is disabled by default and must be enabled per campaign. It requires LLM-generated content and can require review before submission. A submission is allowed only when the score threshold, technology include/exclude rules, contact-form requirement, domain cooldown, daily limit, and per-run limit pass.</p>
+        <table><thead><tr><th>Control</th><th>Default</th><th>Purpose</th></tr></thead><tbody>
+          <tr><td>Autopilot</td><td>Off</td><td>Explicit opt-in for selective automated submission.</td></tr>
+          <tr><td>Minimum score</td><td>60</td><td>Reject weakly qualified sites.</td></tr>
+          <tr><td>Review required</td><td>On</td><td>Keep a human approval gate before sending.</td></tr>
+          <tr><td>Domain cooldown</td><td>30 days</td><td>Prevent repeated outreach to the same root domain.</td></tr>
+          <tr><td>Dry run</td><td>Off</td><td>Discover, enrich, score, and draft without submitting.</td></tr>
+        </tbody></table>
+        <p>Suppressed domains remain blocked until restored. Every submission attempt, generated draft, policy result, and suppression action is recorded in the local audit history.</p>
+        <h3>CLI reporting</h3>
+        <pre><code><span class="command">formharvester leads list</span>
+<span class="command">formharvester leads list --status QUALIFIED</span>
+<span class="command">formharvester leads metrics</span>
+<span class="command">formharvester leads export --output leads.csv</span></code></pre>
       </section>
 
       <section id="technology-detection"><h2>Technology detection</h2>
@@ -216,7 +241,7 @@ with FormHarvester(
     print(result.status)
     print(result.emails)
     print([technology.name for technology in result.technologies])</code></pre>
-        <p><code>result.status</code> is one of <code>SUBMITTED</code>, <code>FORM_NOT_FOUND</code>, <code>BUTTON_NOT_FOUND</code>, <code>VISITED</code>, <code>LLM_ERROR</code>, <code>REVIEW_SKIPPED</code>, or <code>ERROR</code>. When generation succeeds, <code>result.generated</code> contains the generated Subject and Message plus provider/model metadata.</p>
+        <p><code>result.status</code> is one of <code>SUBMITTED</code>, <code>FORM_NOT_FOUND</code>, <code>BUTTON_NOT_FOUND</code>, <code>VISITED</code>, <code>LLM_ERROR</code>, <code>REVIEW_SKIPPED</code>, <code>POLICY_BLOCKED</code>, <code>NOT_QUALIFIED</code>, <code>DRY_RUN</code>, or <code>ERROR</code>. When generation succeeds, <code>result.generated</code> contains the generated Subject and Message plus provider/model metadata.</p>
         <p>Convenience functions <code>harvest_site()</code>, <code>harvest_sites()</code>, and <code>discover_sites()</code> are also available.</p>
         <h3>LLM generation</h3>
         <pre><code>from formharvester import FormFillDetails, FormHarvester, HarvesterOptions
@@ -247,7 +272,12 @@ with FormHarvester(details, options) as fh:
 <span class="command">formharvester profile list</span>
 <span class="command">formharvester run --profile roofing --headless</span></code></pre>
         <p>The CLI prints a short technology summary after each processed site. Run flags override saved settings for that run. Saved LLM settings are used for normal CLI runs, but CLI execution refuses the GUI-only review mode when submission is enabled.</p>
-        <h3>Desktop GUI</h3><p>Open the Campaigns tab to toggle LLM-generated Subject and Message content and edit either direct text or prompts. Use Settings for technology detection, provider credentials, model selection, and manual review. The Run tab prints per-site progress and pauses with editable generated content when review is enabled.</p>
+        <pre><code><span class="command">formharvester leads list</span>
+<span class="command">formharvester leads list --status QUALIFIED</span>
+<span class="command">formharvester leads metrics</span>
+<span class="command">formharvester leads export --output leads.csv</span></code></pre>
+        <p>Lead reports are emitted from the local SQLite database. Use the Campaigns tab to configure score thresholds, technology rules, cooldowns, limits, dry runs, and selective autopilot. The Leads tab shows the same records with suppression and audit actions.</p>
+        <h3>Desktop GUI</h3><p>Open the Campaigns tab to toggle LLM-generated Subject and Message content and edit either direct text or prompts. Use Qualification &amp; safety for campaign-level autopilot rules. Use Settings for technology detection, provider credentials, model selection, and manual review. The Run tab prints per-site progress and pauses with editable generated content when review is enabled; the Leads tab shows the persistent funnel.</p>
       </section>
 
       <section id="output"><h2>Output files</h2>
@@ -258,6 +288,8 @@ with FormHarvester(details, options) as fh:
           <tr><td><code>roofing_technologies.jsonl</code></td><td>One structured technology record per scanned site.</td></tr>
           <tr><td><code>roofing_progress.txt</code></td><td>Per-site campaign status used for resuming work.</td></tr>
           <tr><td><code>website_log.txt</code></td><td>Globally visited root domains.</td></tr>
+          <tr><td><code>leads.sqlite3</code></td><td>Local lead records, enrichment, policy decisions, and audit history.</td></tr>
+          <tr><td><code>roofing_leads.csv</code></td><td>Export of the active campaign's lead records.</td></tr>
         </tbody></table>
         <h3>Technology JSONL record</h3>
         <pre><code>{
@@ -293,6 +325,7 @@ with FormHarvester(details, options) as fh:
           <tr><td><code>llm.review_before_submit</code></td><td>Require GUI approval and allow editing before submission.</td><td><code>false</code></td></tr>
           <tr><td><code>llm.request_timeout</code></td><td>Maximum provider request duration in seconds.</td><td><code>60</code></td></tr>
         </tbody></table>
+        <p>Campaign policy is stored in each <code>profiles/&lt;name&gt;.json</code> under <code>policy</code>. Important fields include <code>autopilot_enabled</code>, <code>minimum_score</code>, <code>require_review</code>, <code>cooldown_days</code>, <code>max_submissions_per_run</code>, <code>max_submissions_per_day</code>, <code>dry_run</code>, <code>include_technologies</code>, and <code>exclude_technologies</code>. Autopilot defaults to disabled and review defaults to required.</p>
         <p>Set <code>FORMHARVESTER_HOME</code> to move configuration, profiles, data, and logs to another directory.</p>
       </section>
 
@@ -309,7 +342,7 @@ Selenium Chrome session
       ↓
 HarvestResult + campaign output files</code></pre>
         <p>The detector is intentionally separate from the form handler. If a page exposes no technology signal, or if browser performance logs are unavailable, normal harvesting continues with HTML, DOM, and resource signals.</p>
-        <p>FormHarvester does not require Wappalyzer, a hosted technology API, or a browser extension. LLM providers are isolated behind a normalized client interface, so an additional provider can be added without changing the form handler or result shape.</p>
+        <p>FormHarvester does not require Wappalyzer, a hosted technology API, or a browser extension. LLM providers are isolated behind a normalized client interface, and lead persistence is local SQLite, so an additional provider or reporting client can be added without changing the browser workflow.</p>
       </section>
 
       <section id="development"><h2>Development</h2>

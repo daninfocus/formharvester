@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 import typer
@@ -9,10 +10,12 @@ from pydantic import ValidationError
 
 from formharvester.cli.app import Bot
 from formharvester.core import __VERSION__
+from formharvester.leads import LeadRepository
 from formharvester.settings import (
     CampaignProfile,
     Settings,
     config_home,
+    data_dir,
     list_profiles,
     load_profile,
     load_settings,
@@ -134,8 +137,10 @@ def gui() -> None:
 
 settings_app = typer.Typer(help="Inspect and change saved settings.", no_args_is_help=True)
 profile_app = typer.Typer(help="Manage campaign profiles.", no_args_is_help=True)
+leads_app = typer.Typer(help="Inspect and export local lead intelligence.", no_args_is_help=True)
 cli.add_typer(settings_app, name="settings")
 cli.add_typer(profile_app, name="profile")
+cli.add_typer(leads_app, name="leads")
 
 
 @settings_app.command("show")
@@ -215,6 +220,42 @@ def profile_use(name: Annotated[str, typer.Argument(help="Profile to make active
     settings = load_settings()
     save_settings(settings.model_copy(update={"active_profile": name}))
     typer.echo(f"Active profile: {name}")
+
+
+@leads_app.command("list")
+def leads_list(
+    status: Annotated[str | None, typer.Option(help="Filter by lead status.")] = None,
+    campaign: Annotated[str | None, typer.Option("--campaign", "-c", help="Campaign to inspect.")] = None,
+) -> None:
+    """Print local lead records as one JSON object per line."""
+    selected = campaign or load_settings().active_profile
+    with LeadRepository(data_dir()) as leads:
+        records = leads.list_leads(campaign=selected, status=status, limit=1000)
+    for record in records:
+        typer.echo(json.dumps(record.to_dict(), ensure_ascii=False))
+
+
+@leads_app.command("metrics")
+def leads_metrics(
+    campaign: Annotated[str | None, typer.Option("--campaign", "-c", help="Campaign to inspect.")] = None,
+) -> None:
+    """Print the local lead funnel metrics as JSON."""
+    selected = campaign or load_settings().active_profile
+    with LeadRepository(data_dir()) as leads:
+        typer.echo(json.dumps(leads.metrics(selected)))
+
+
+@leads_app.command("export")
+def leads_export(
+    destination: Annotated[str | None, typer.Option("--output", "-o", help="CSV output path.")] = None,
+    campaign: Annotated[str | None, typer.Option("--campaign", "-c", help="Campaign to export.")] = None,
+) -> None:
+    """Export local lead records to CSV."""
+    selected = campaign or load_settings().active_profile
+    path = destination or str(data_dir() / f"{selected}_leads.csv")
+    with LeadRepository(data_dir()) as leads:
+        exported = leads.export_csv(path, campaign=selected)
+    typer.echo(str(exported))
 
 
 @cli.command()

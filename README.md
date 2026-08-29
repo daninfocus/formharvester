@@ -65,11 +65,13 @@ Scraped emails, progress files and error logs are written to `data/` and
 
 ### From the GUI
 
-`formharvester gui` opens three tabs: **Run** picks the active campaign and
+`formharvester gui` opens four tabs: **Run** picks the active campaign and
 streams the live console, **Campaigns** edits and manages campaign details and
-query lists, and **Settings** covers the engine, search pacing, captcha solver,
+query lists, **Leads** shows locally persisted enrichment and submission
+history, and **Settings** covers the engine, search pacing, captcha solver,
 and LLM provider configuration. The Campaigns tab controls whether a campaign
-uses direct text or LLM-generated form content.
+uses direct text or LLM-generated form content and configures selective
+autopilot safety rules.
 
 Campaign **Search queries** are sent to Google. Optional **URL filters** are
 matched against the URLs returned by Google; they do not search page content or
@@ -148,6 +150,22 @@ field metadata. It does not send raw HTML, cookies, scripts, or page source.
 Provider usage can incur charges, and configured campaign identity details are
 sent to the selected provider when generation is enabled.
 
+### Qualification and selective autopilot
+
+Campaigns can optionally enable **Selective autopilot**. FormHarvester scores
+each site deterministically using observable signals such as contact-form
+availability, public emails, and technology fingerprints. The Leads tab shows
+the score and the reasons behind it. Autopilot submits only when the campaign
+score threshold, technology rules, contact-form requirement, domain cooldown,
+daily limit, and per-run limit all pass. Autopilot is disabled by default and
+requires LLM-generated content; manual review is enabled by default for this
+mode.
+
+Use **Dry run** to discover, enrich, score, and generate drafts while making
+submission impossible. Suppressed domains remain blocked until explicitly
+restored. Every submission attempt, policy result, draft, and suppression
+change is written to the local lead database.
+
 ## Programmatic use (library API)
 
 Since `2.4.0` FormHarvester ships a library API so you can drive the engine from
@@ -173,7 +191,8 @@ with FormHarvester(details, HarvesterOptions(send_form=True, headless=True)) as 
 ```
 
 `result.status` is one of `SUBMITTED`, `FORM_NOT_FOUND`, `BUTTON_NOT_FOUND`,
-`VISITED`, `LLM_ERROR`, `REVIEW_SKIPPED`, or `ERROR` - the same tokens the CLI
+`VISITED`, `LLM_ERROR`, `REVIEW_SKIPPED`, `POLICY_BLOCKED`, `NOT_QUALIFIED`,
+`DRY_RUN`, or `ERROR` - the same tokens the CLI
 writes to its progress file. When generation succeeds, `result.generated`
 contains the generated Subject and Message plus provider/model metadata.
 One-shot helpers `harvest_site(url, details)` and `harvest_sites(urls, details)`
@@ -293,6 +312,19 @@ CLI runs append one JSON object per scanned site to
 scan time, and the same structured technology matches returned by the library.
 The desktop GUI exposes a **Detect site technologies** setting and prints a
 short summary in the Run console.
+
+Lead intelligence is available from the CLI as JSON lines, metrics, or CSV:
+
+```bash
+formharvester leads list
+formharvester leads metrics
+formharvester leads export --output leads.csv
+```
+
+Operational lead state is stored in `data/leads.sqlite3`; campaign-specific
+CSV exports are written beside it. The database keeps scores, evidence,
+generated drafts, policy decisions, suppression changes, and submission audit
+events locally.
 
 ### Live smoke-test example
 
