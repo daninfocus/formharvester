@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -145,3 +146,17 @@ class ProgressMixin(_Base):
                     if email not in existing_emails:
                         f.write(f"{email} ({url})" + "\n")
                         logged.add(email)
+
+    def export_technologies(self, url, filename=None):
+        """Append one JSON record for a site's technology scan."""
+        if not getattr(self, "detect_technologies", True):
+            return
+        filename = filename or self.mode
+        path = self._data_file(f"{filename}_technologies.jsonl")
+        record = {
+            "url": url,
+            "scanned_at": datetime.now(UTC).isoformat(),
+            "technologies": [item.to_dict() for item in getattr(self, "technologies", [])],
+        }
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")

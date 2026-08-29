@@ -7,10 +7,12 @@ or fails outright.
 
 from __future__ import annotations
 
+import json
 import os
 
 from formharvester.cli.progress import ProgressMixin
 from formharvester.settings import config_home, data_dir, log_dir
+from formharvester.technology import TechnologyEvidence, TechnologyMatch
 
 
 class _Harness(ProgressMixin):
@@ -22,6 +24,8 @@ class _Harness(ProgressMixin):
         self.visited_websites = []
         self.scraped_emails = set()
         self.generate_email_sources = True
+        self.detect_technologies = True
+        self.technologies = []
 
 
 def test_directories_sit_under_the_config_home(tmp_path):
@@ -70,3 +74,22 @@ def test_writing_outputs_does_not_touch_the_working_directory(tmp_path, monkeypa
 
     # nothing leaked into the process's working directory
     assert os.listdir(work) == []
+
+
+def test_technology_export_is_jsonl_and_stays_in_data_dir(tmp_path):
+    bot = _Harness(tmp_path / "data")
+    bot.technologies = [
+        TechnologyMatch(
+            name="Next.js",
+            category="Web framework",
+            confidence=0.98,
+            evidence=[TechnologyEvidence("resource_url", "/_next/static/app.js", "Next.js runtime marker")],
+        )
+    ]
+
+    bot.export_technologies("https://acme.com", filename="roofing")
+    record = json.loads((tmp_path / "data" / "roofing_technologies.jsonl").read_text().strip())
+
+    assert record["url"] == "https://acme.com"
+    assert record["technologies"][0]["name"] == "Next.js"
+    assert record["technologies"][0]["evidence"][0]["source"] == "resource_url"

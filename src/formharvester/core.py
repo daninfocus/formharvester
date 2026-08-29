@@ -19,6 +19,7 @@ from formharvester.captcha.detector import CaptchaMixin
 from formharvester.engine import SeleniumBot
 from formharvester.form_handler import FormHandlerMixin
 from formharvester.scraper.emails import EmailScraperMixin
+from formharvester.technology import TechnologyDetector, TechnologyMatch
 from formharvester.utils import get_root_url
 
 if TYPE_CHECKING:
@@ -70,6 +71,7 @@ class HarvesterCore(SeleniumBot, CaptchaMixin, EmailScraperMixin, FormHandlerMix
 
     max_time = 30
     crawl = True
+    detect_technologies = True
 
     def bot_print(self, message: object, is_input: bool = False, figlet: bool = False) -> None:
         if figlet:
@@ -97,3 +99,29 @@ class HarvesterCore(SeleniumBot, CaptchaMixin, EmailScraperMixin, FormHandlerMix
 
     def _note_visited(self, url: str) -> None:
         self.visited_websites.append(get_root_url(url))
+
+    def _scan_technologies(self) -> list[TechnologyMatch]:
+        """Scan the current page without allowing detection to affect harvests."""
+        if not getattr(self, "detect_technologies", True):
+            return []
+        try:
+            matches = TechnologyDetector().detect(TechnologyDetector.from_driver(self.driver))
+        except Exception:
+            return []
+
+        existing = {(item.name, item.category): item for item in getattr(self, "technologies", [])}
+        for match in matches:
+            key = (match.name, match.category)
+            current = existing.get(key)
+            if current is None:
+                existing[key] = match
+                continue
+            current.confidence = max(current.confidence, match.confidence)
+            if current.version is None:
+                current.version = match.version
+            evidence = {(item.source, item.value, item.detail) for item in current.evidence}
+            current.evidence.extend(
+                item for item in match.evidence if (item.source, item.value, item.detail) not in evidence
+            )
+        self.technologies = sorted(existing.values(), key=lambda item: (item.category.lower(), item.name.lower()))
+        return matches

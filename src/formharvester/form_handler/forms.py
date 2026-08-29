@@ -217,6 +217,9 @@ class FormHandlerMixin(_Base):
         self.bot_print(url)
         self._note_visited(url)  # record globally (file for CLI, memory for API)
 
+        # Technology matches belong to one target site.  The detector is
+        # passive and must never prevent the existing harvest flow.
+        self.technologies = []
         self.name_filled = False
         self.scraped_emails = set()
         self.visited_links.clear()
@@ -225,6 +228,8 @@ class FormHandlerMixin(_Base):
         contact = self.get(contact_url, sleep=1, check=True)
         if not contact:
             return
+
+        self._scan_technologies()
 
         # Start time thread
         t = threading.Thread(target=self.check_time)
@@ -249,6 +254,7 @@ class FormHandlerMixin(_Base):
             if not x:
                 return
 
+            self._scan_technologies()
             self.scrape_emails()
             # Switch to first tab
             self.driver.switch_to.window(self.driver.window_handles[0])

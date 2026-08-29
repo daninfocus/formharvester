@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FormHarvester Documentation</title>
+<meta name="description" content="Install, configure, and use FormHarvester for web discovery, contact extraction, technology detection, and browser-driven form workflows." />
+<meta name="keywords" content="FormHarvester documentation, website technology detection, technology inference, form scraper, Selenium, lead enrichment, Python web scraping" />
+<link rel="canonical" href="https://formharvester.com/docs/" />
+<meta name="robots" content="index, follow" />
+<meta name="theme-color" content="#08090c" />
+<link rel="icon" href="../logo.png" type="image/png" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="FormHarvester" />
+<meta property="og:title" content="FormHarvester Documentation" />
+<meta property="og:description" content="Documentation for FormHarvester discovery, contact extraction, local technology detection, and browser-driven form workflows." />
+<meta property="og:url" content="https://formharvester.com/docs/" />
+<meta property="og:image" content="https://formharvester.com/logo.jpeg" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "FormHarvester Documentation",
+  "description": "Documentation for the open-source FormHarvester form intelligence engine and local website technology detector.",
+  "url": "https://formharvester.com/docs/",
+  "author": {"@type": "Organization", "name": "FormHarvester"},
+  "isPartOf": {"@type": "SoftwareApplication", "name": "FormHarvester", "url": "https://formharvester.com/"}
+}
+</script>
+<style>
+  :root { color-scheme: dark; --bg: #08090c; --panel: #0e1117; --fg: #e7e9ee; --muted: #8b93a2; --faint: #596170; --accent: #8ecbff; --green: #a7e3bd; --yellow: #f0d99a; --border: #202632; --max: 1180px; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.7 ui-monospace, "SFMono-Regular", Consolas, monospace; }
+  a { color: var(--accent); }
+  a:hover { color: #c8eaff; }
+  code { color: #cde9ff; }
+  p { max-width: 78ch; }
+  .site-header { position: sticky; top: 0; z-index: 5; border-bottom: 1px solid var(--border); background: rgba(8, 9, 12, 0.94); backdrop-filter: blur(12px); }
+  .header-inner { max-width: var(--max); min-height: 70px; margin: 0 auto; padding: 0 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .brand { display: flex; align-items: center; gap: 0.65rem; color: var(--fg); font-weight: 700; text-decoration: none; }
+  .brand img { width: 34px; height: 40px; object-fit: contain; }
+  .brand-f { color: var(--accent); }
+  .brand small { color: var(--muted); font-weight: 400; }
+  .top-links { display: flex; gap: 1rem; font-size: 0.82rem; }
+  .layout { max-width: var(--max); margin: 0 auto; padding: 3.5rem 1.25rem 6rem; display: grid; grid-template-columns: 215px minmax(0, 1fr); gap: 3.5rem; }
+  .sidebar { position: sticky; top: 100px; align-self: start; font-size: 0.8rem; }
+  .sidebar-label { margin-bottom: 0.7rem; color: var(--faint); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; }
+  .sidebar a { display: block; padding: 0.25rem 0; color: var(--muted); text-decoration: none; }
+  .sidebar a:hover { color: var(--accent); }
+  article { min-width: 0; }
+  .eyebrow { margin: 0 0 0.75rem; color: var(--accent); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  h1, h2, h3 { line-height: 1.25; }
+  h1 { margin: 0 0 1rem; font-size: clamp(2rem, 5vw, 3.8rem); letter-spacing: -0.04em; }
+  h2 { margin: 4rem 0 1rem; padding-top: 1rem; font-size: 1.55rem; }
+  h3 { margin: 2rem 0 0.6rem; color: #cfd5df; font-size: 1rem; }
+  .lede { max-width: 70ch; color: var(--muted); font-size: 1.02rem; }
+  .hero-note, .callout { margin: 1.7rem 0; padding: 1rem 1.1rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); background: var(--panel); }
+  .callout strong { color: var(--green); }
+  .callout.warning { border-left-color: var(--yellow); }
+  pre { overflow-x: auto; margin: 1rem 0; padding: 1rem 1.1rem; border: 1px solid var(--border); border-radius: 6px; background: #050609; font-size: 0.82rem; line-height: 1.6; }
+  .command { color: var(--green); }
+  .muted { color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
+  .card { padding: 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); }
+  .card h3 { margin-top: 0; color: var(--accent); }
+  .card p { margin-bottom: 0; color: var(--muted); font-size: 0.86rem; }
+  table { width: 100%; margin: 1rem 0 1.5rem; border-collapse: collapse; font-size: 0.82rem; }
+  th, td { padding: 0.7rem 0.55rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { color: var(--accent); font-weight: 600; }
+  td { color: var(--muted); }
+  td:first-child { color: var(--fg); }
+  .footer { max-width: var(--max); margin: 0 auto; padding: 1.5rem 1.25rem 3rem; border-top: 1px solid var(--border); color: var(--faint); font-size: 0.78rem; }
+  @media (max-width: 800px) {
+    .layout { display: block; padding-top: 2.2rem; }
+    .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 0 1rem; margin-bottom: 2rem; }
+    .sidebar-label { width: 100%; }
+    .sidebar a { padding: 0.15rem 0; }
+    .grid { grid-template-columns: 1fr; }
+    .top-links { gap: 0.6rem; }
+    .top-links a:first-child { display: none; }
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="header-inner">
+    <a class="brand" href="../"><img src="../logo.png" alt="" width="34" height="40" /><span><span class="brand-f">F</span>ormHarvester <small>/ docs</small></span></a>
+    <nav class="top-links" aria-label="External links"><a href="https://github.com/dariomory/formharvester">GitHub</a><a href="../">Home</a></nav>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" aria-label="Documentation sections">
+    <div class="sidebar-label">On this page</div>
+    <a href="#overview">Overview</a><a href="#install">Install</a><a href="#quick-start">Quick start</a>
+    <a href="#technology-detection">Technology detection</a><a href="#inference">Inference and confidence</a>
+    <a href="#api">Library API</a><a href="#cli-gui">CLI and GUI</a><a href="#output">Output files</a>
+    <a href="#configuration">Configuration</a><a href="#architecture">Architecture</a><a href="#development">Development</a>
+  </aside>
+
+  <main>
+    <article>
+      <p class="eyebrow">Documentation · v2.4.2</p>
+      <h1>Form intelligence.<br />engineered.</h1>
+      <p class="lede">FormHarvester searches for target sites, visits contact pages, extracts public contact signals, detects browser-visible technologies, and can optionally fill and submit forms through a real browser session.</p>
+      <div class="hero-note"><strong>Safe default:</strong> technology detection is passive and local. Form submission is opt-in; use <code>send_form=False</code> for testing and technology-only scans.</div>
+
+      <section id="overview"><h2>Overview</h2>
+        <p>FormHarvester is available as a Windows desktop app, a Python CLI, and a library. All three interfaces share the same Selenium-based engine, campaign profiles, settings, email extraction, form handling, and local technology detector.</p>
+        <div class="grid">
+          <div class="card"><h3>Discover</h3><p>Search Google for business targets, normalize domains, remove duplicates, and resume interrupted search work.</p></div>
+          <div class="card"><h3>Extract</h3><p>Visit contact pages and landing pages, then collect public email addresses with their source URLs.</p></div>
+          <div class="card"><h3>Detect</h3><p>Identify CMSs, frontend frameworks, analytics, payments, hosting, CDNs, and web servers from passive browser-visible evidence.</p></div>
+          <div class="card"><h3>Interact</h3><p>Fill and optionally submit contact forms using the form details in the active campaign profile.</p></div>
+        </div>
+      </section>
+
+      <section id="install"><h2>Install</h2>
+        <h3>Windows desktop app</h3>
+        <p>Download the latest executable from <a href="https://github.com/dariomory/formharvester/releases/latest/download/formharvester.exe">GitHub Releases</a>. The desktop app contains the GUI and browser engine; no configuration files need to be edited manually.</p>
+        <h3>Python package</h3>
+        <pre><code><span class="command">pip install formharvester</span>
+
+<span class="muted"># Optional desktop GUI support</span>
+<span class="command">pip install "formharvester[gui]"</span></code></pre>
+        <p>The base package provides the CLI and library. The <code>gui</code> extra adds pywebview.</p>
+      </section>
+
+      <section id="quick-start"><h2>Quick start</h2>
+        <h3>Run the desktop GUI</h3><pre><code><span class="command">formharvester gui</span></code></pre>
+        <h3>Run a configured campaign</h3>
+        <pre><code><span class="command">formharvester profile create roofing</span>
+<span class="command">formharvester profile use roofing</span>
+<span class="command">formharvester run --headless --max-pages 3</span></code></pre>
+        <h3>Discover URLs without submitting forms</h3><pre><code><span class="command">formharvester discover "roofing companies austin"</span></code></pre>
+      </section>
+
+      <section id="technology-detection"><h2>Technology detection</h2>
+        <p>Every harvest runs a local, passive scan by default. It reuses the Selenium session already opened for the site, so it does not require a separate Wappalyzer extension, a hosted API, or another crawl.</p>
+        <h3>What is inspected</h3>
+        <table><thead><tr><th>Signal</th><th>Examples</th><th>What it can reveal</th></tr></thead><tbody>
+          <tr><td>HTML and DOM</td><td>Generator tags, <code>ng-version</code>, <code>astro-island</code>, <code>data-v-*</code></td><td>CMSs and frontend frameworks</td></tr>
+          <tr><td>Scripts and stylesheets</td><td><code>/_next/</code>, jQuery, Bootstrap, hosted service URLs</td><td>Frameworks, libraries, analytics, payments</td></tr>
+          <tr><td>JavaScript globals</td><td><code>Shopify</code>, <code>__NUXT__</code>, <code>dataLayer</code></td><td>Runtime platforms and browser services</td></tr>
+          <tr><td>Cookies by name</td><td><code>csrftoken</code>, Shopify cookie names</td><td>Useful framework or platform clues</td></tr>
+          <tr><td>Response headers</td><td><code>Server</code>, Vercel, Cloudflare, CloudFront markers</td><td>Web servers, hosting, CDN, security layers</td></tr>
+          <tr><td>Performance resources</td><td>Loaded asset and iframe URLs</td><td>Technologies used after initial page load</td></tr>
+        </tbody></table>
+        <h3>Detected result</h3>
+        <pre><code>result = fh.harvest("https://example.com")
+
+for technology in result.technologies:
+    print(technology.name)
+    print(technology.category)
+    print(technology.version)
+    print(technology.confidence)
+    print(technology.evidence)</code></pre>
+        <p>Each match contains a name, category, optional version, confidence score, and evidence records. Evidence values are designed for auditing; cookie values are redacted and are never exported.</p>
+      </section>
+
+      <section id="inference"><h2>Inference and confidence</h2>
+        <p>Technology detection is fingerprinting, not access to a site's source repository or server. A public page can expose the frontend and infrastructure while hiding the backend behind a reverse proxy.</p>
+        <table><thead><tr><th>Confidence</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td>0.90–1.00</td><td>Distinctive direct fingerprint, such as a framework asset path or response header.</td></tr>
+          <tr><td>0.70–0.89</td><td>Strong but not unique marker, often an asset URL or hosted-service clue.</td></tr>
+          <tr><td>Below 0.70</td><td>Weak or inferred result. Treat it as a lead for review, not as verified fact.</td></tr>
+        </tbody></table>
+        <div class="callout warning"><strong>Backend limitation:</strong> Django, FastAPI, Flask, Rails, and similar frameworks often emit indistinguishable HTML. FormHarvester reports them only when a meaningful browser-visible clue exists and labels weak results as inferences. It will not guess a backend from a URL shape alone.</div>
+        <h3>Live smoke-test example</h3>
+        <p>A read-only smoke scan of <code>https://mory.dev</code> returned the following at test time:</p>
+        <table><thead><tr><th>Technology</th><th>Category</th><th>Confidence</th><th>Evidence interpretation</th></tr></thead><tbody>
+          <tr><td>Astro</td><td>Web framework</td><td>0.98</td><td>Direct Astro runtime marker.</td></tr>
+          <tr><td>Vercel</td><td>Hosting</td><td>0.95</td><td>Vercel hostname or response-header marker.</td></tr>
+          <tr><td>Django</td><td>Backend framework</td><td>0.60</td><td>Lower-confidence HTML inference, not proof.</td></tr>
+        </tbody></table>
+        <p class="muted">Stacks change. This is an example of the result format, not a permanent assertion about the site.</p>
+      </section>
+
+      <section id="api"><h2>Library API</h2>
+        <p>The library API avoids settings files and returns structured Python objects.</p>
+        <pre><code>from formharvester import FormFillDetails, FormHarvester, HarvesterOptions
+
+with FormHarvester(
+    FormFillDetails(email="jane@example.com", message="I would like a quote."),
+    HarvesterOptions(headless=True, send_form=False, detect_technologies=True),
+) as fh:
+    result = fh.harvest("https://example.com")
+    print(result.status)
+    print(result.emails)
+    print([technology.name for technology in result.technologies])</code></pre>
+        <p><code>result.status</code> is one of <code>SUBMITTED</code>, <code>FORM_NOT_FOUND</code>, <code>BUTTON_NOT_FOUND</code>, <code>VISITED</code>, or <code>ERROR</code>. Existing status and email behavior is unchanged by technology detection.</p>
+        <p>Convenience functions <code>harvest_site()</code>, <code>harvest_sites()</code>, and <code>discover_sites()</code> are also available.</p>
+      </section>
+
+      <section id="cli-gui"><h2>CLI and GUI</h2>
+        <h3>CLI</h3>
+        <pre><code><span class="command">formharvester settings show</span>
+<span class="command">formharvester settings set engine.detect_technologies false</span>
+<span class="command">formharvester profile list</span>
+<span class="command">formharvester run --profile roofing --headless</span></code></pre>
+        <p>The CLI prints a short technology summary after each processed site. Run flags override saved settings for that run.</p>
+        <h3>Desktop GUI</h3><p>Open the Settings tab and use <strong>Detect site technologies</strong>. The Run tab prints a summary for each site while structured records are written to the campaign data directory.</p>
+      </section>
+
+      <section id="output"><h2>Output files</h2>
+        <p>Runtime data lives beside the active configuration. A campaign named <code>roofing</code> can produce:</p>
+        <table><thead><tr><th>File</th><th>Purpose</th></tr></thead><tbody>
+          <tr><td><code>roofing_emails.txt</code></td><td>Unique extracted email addresses.</td></tr>
+          <tr><td><code>roofing_emails_sources.txt</code></td><td>Email addresses with the page URL where each was found.</td></tr>
+          <tr><td><code>roofing_technologies.jsonl</code></td><td>One structured technology record per scanned site.</td></tr>
+          <tr><td><code>roofing_progress.txt</code></td><td>Per-site campaign status used for resuming work.</td></tr>
+          <tr><td><code>website_log.txt</code></td><td>Globally visited root domains.</td></tr>
+        </tbody></table>
+        <h3>Technology JSONL record</h3>
+        <pre><code>{
+  "url": "https://example.com",
+  "scanned_at": "2026-08-29T00:00:00+00:00",
+  "technologies": [{
+    "name": "Next.js",
+    "category": "Web framework",
+    "version": null,
+    "confidence": 0.98,
+    "evidence": [{
+      "source": "dom_or_url",
+      "value": "__NEXT_DATA__ or /_next/",
+      "detail": "Next.js runtime marker"
+    }]
+  }]
+}</code></pre>
+      </section>
+
+      <section id="configuration"><h2>Configuration</h2>
+        <p>Settings are stored in <code>formharvester.json</code>. Campaign form details and search queries are stored in <code>profiles/&lt;name&gt;.json</code>. Use <code>formharvester settings path</code> to locate the active configuration directory.</p>
+        <table><thead><tr><th>Setting</th><th>Purpose</th><th>Default</th></tr></thead><tbody>
+          <tr><td><code>engine.send_form</code></td><td>Submit a filled contact form.</td><td><code>false</code> in saved settings</td></tr>
+          <tr><td><code>engine.headless</code></td><td>Hide the Chrome window.</td><td><code>false</code></td></tr>
+          <tr><td><code>engine.max_time</code></td><td>Maximum seconds allowed per site.</td><td><code>30</code></td></tr>
+          <tr><td><code>engine.detect_technologies</code></td><td>Enable passive detection and JSONL export.</td><td><code>true</code></td></tr>
+          <tr><td><code>engine.generate_email_sources</code></td><td>Write the source URL beside each email.</td><td><code>true</code></td></tr>
+          <tr><td><code>google.max_pages</code></td><td>Search result pages per query.</td><td><code>3</code></td></tr>
+          <tr><td><code>captcha.provider</code></td><td><code>deathbycaptcha</code>, <code>2captcha</code>, <code>none</code>, or blank.</td><td>blank</td></tr>
+        </tbody></table>
+        <p>Set <code>FORMHARVESTER_HOME</code> to move configuration, profiles, data, and logs to another directory.</p>
+      </section>
+
+      <section id="architecture"><h2>Architecture</h2>
+        <pre><code>Google discovery
+      ↓
+Selenium Chrome session
+      ├── contact-page discovery
+      ├── email extraction
+      ├── technology signal capture
+      │     └── local fingerprint rules
+      └── optional form fill/submit
+      ↓
+HarvestResult + campaign output files</code></pre>
+        <p>The detector is intentionally separate from the form handler. If a page exposes no technology signal, or if browser performance logs are unavailable, normal harvesting continues with HTML, DOM, and resource signals.</p>
+        <p>FormHarvester does not require Wappalyzer, a hosted technology API, or a browser extension. An external provider can be added later without changing the result shape.</p>
+      </section>
+
+      <section id="development"><h2>Development</h2>
+        <pre><code><span class="command">uv sync</span>
+<span class="command">uv run pytest -q -m "not smoke"</span>
+<span class="command">uv run pytest -q -m smoke</span>
+<span class="command">uv run ruff check src tests</span></code></pre>
+        <p>The smoke test needs Chrome, a matching driver, and network access. The test suite includes browser-free detector and API tests as well as the live smoke test.</p>
+        <div class="callout"><strong>Responsible use:</strong> only scan and contact sites where you have a lawful, appropriate reason to do so. Respect site terms, robots guidance, privacy expectations, rate limits, and applicable anti-spam rules.</div>
+      </section>
+    </article>
+  </main>
+</div>
+
+<footer class="footer">FormHarvester is MIT licensed and open source. <a href="https://github.com/dariomory/formharvester">View the source</a> · <a href="https://github.com/dariomory/formharvester/blob/master/LICENSE">License</a> · <a href="../">Project home</a></footer>
+</body>
+</html>

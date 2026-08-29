@@ -75,6 +75,7 @@ class EngineSettings(BaseModel):
     max_time: int = Field(default=30, ge=1, description="Seconds allowed per site")
     generate_email_sources: bool = True
     debug_form: bool = Field(default=False, description="Fill forms but never submit")
+    detect_technologies: bool = True
 
 
 class GoogleSettings(BaseModel):

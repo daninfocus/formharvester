@@ -67,6 +67,10 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
                 self.log(screenshot=True, error=e)
                 self.restart_driver()
             self.export_emails(filename=self.mode)
+            self.export_technologies(url, filename=self.mode)
+            if self.detect_technologies:
+                technologies = ", ".join(item.name for item in self.technologies) or "none detected"
+                self.bot_print(f"Technologies: {technologies}")
             # Wait for thread to finish
             if self.threads:
                 t = self.threads.pop()
@@ -87,6 +91,7 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
         self.skip_ads = engine.skip_ads
         self.send_form = engine.send_form
         self.generate_email_sources = engine.generate_email_sources
+        self.detect_technologies = engine.detect_technologies
         self.max_time = engine.max_time
 
         self.HEADLESS = engine.headless

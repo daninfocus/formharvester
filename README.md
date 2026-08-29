@@ -3,10 +3,35 @@
 [![PyPI](https://img.shields.io/pypi/v/formharvester.svg?logo=pypi&logoColor=white&color=3775A9)](https://pypi.org/project/formharvester/)
 [![Latest release (Windows)](https://custom-icon-badges.demolab.com/github/v/release/dariomory/formharvester?label=Windows%20exe&logo=windows11&logoColor=white&color=0078D6)](https://github.com/dariomory/formharvester/releases/latest/download/formharvester.exe)
 
-**Website:** [formharvester.com](https://formharvester.com)
+**Website:** [formharvester.com](https://formharvester.com) · **Documentation:** [formharvester.com/docs](https://formharvester.com/docs/)
 
 FormHarvester is an AI-assisted form intelligence engine.
 It navigates the open web autonomously - executing searches, parsing page structure, extracting contact signals, and interacting with forms at the browser level. Built on async browser with stealth fingerprinting, proxy rotation, and a pluggable captcha solver interface.
+
+## What it does
+
+FormHarvester combines discovery, passive site analysis, contact-signal
+extraction, and optional form interaction in one browser-driven workflow:
+
+1. Search for target businesses with Google queries.
+2. Normalize and deduplicate the discovered site URLs.
+3. Visit contact pages and landing pages through Selenium Chrome.
+4. Extract public email addresses and their source URLs.
+5. Detect browser-visible technologies with confidence and evidence.
+6. Optionally fill and submit a contact form using the configured profile.
+
+Form submissions are opt-in through `engine.send_form` or
+`HarvesterOptions(send_form=True)`. Use `send_form=False` for discovery,
+testing, and technology-only scans.
+
+## Contents
+
+- [Installation and quick start](#how-to-run)
+- [Configuration](#configuration)
+- [Technology detection and inference](#technology-detection-and-inference)
+- [Library API](#programmatic-use-library-api)
+- [CLI output files](#cli-output-files)
+- [Development and testing](#development-and-testing)
 
 ![The FormHarvester desktop app](docs/screenshot-gui.png)
 
@@ -72,6 +97,7 @@ Flags on `run` override the saved settings for that run only.
 | `engine.max_time` | Seconds allowed per website. |
 | `engine.generate_email_sources` | Also record the URL each email came from. |
 | `engine.debug_form` | Fill forms but never submit them. |
+| `engine.detect_technologies` | Passively detect technologies exposed by each site. |
 | `google.start_page` | Results page to start from. |
 | `google.max_pages` | Result pages to walk per query. |
 | `google.min_delay` / `google.max_delay` | Random delay range, in seconds, between searches. |
@@ -113,7 +139,110 @@ are also available.
 `discover()` raises `CaptchaError` rather than blocking; set
 `HarvesterOptions.captcha_sleep` to wait it out instead.
 
-## Package layout (2.4.1)
+## Technology detection and inference
+
+The full guide is published at
+[`formharvester.com/docs`](https://formharvester.com/docs/). The detector is
+local, passive, and enabled by default; it adds no paid API and does not load a
+browser extension.
+
+### How the scan works
+
+When Selenium has loaded a target page, FormHarvester collects browser-visible
+signals from the same session already being used for harvesting:
+
+- HTML, generator tags, DOM markers, and known framework globals.
+- Script, stylesheet, iframe, and performance-resource URLs.
+- Cookies by name only; cookie values are never written to evidence.
+- Response headers when Chrome exposes them through performance logging.
+
+The detector matches those signals against local rules and returns a technology
+name, category, optional version, confidence score, and human-readable evidence.
+The landing page and contact page are merged into one site result.
+
+### Inference policy
+
+Client-side technologies and infrastructure often leave strong fingerprints.
+Backend frameworks usually do not. A site may be built with Django or FastAPI
+but expose only generic HTML through a reverse proxy, so FormHarvester does not
+claim a backend from a URL shape or a vague response. Backend results are
+reported only when a meaningful signal exists and are marked as lower-confidence
+inferences where appropriate.
+
+### Library usage
+
+```python
+from formharvester import FormFillDetails, FormHarvester, HarvesterOptions
+
+with FormHarvester(
+    FormFillDetails(),
+    HarvesterOptions(send_form=False, detect_technologies=True),
+) as fh:
+    result = fh.harvest("https://example.com")
+
+for technology in result.technologies:
+    print(technology.name, technology.category, technology.confidence)
+    for evidence in technology.evidence:
+        print("  ", evidence.detail)
+```
+
+Set `detect_technologies=False` to disable detection. The existing harvest
+status and email behavior is unchanged when detection is disabled or when a
+page exposes no reliable technology signals.
+
+### Result shape
+
+`HarvestResult.technologies` is a list of `TechnologyMatch` objects:
+
+```json
+{
+  "name": "Next.js",
+  "category": "Web framework",
+  "version": null,
+  "confidence": 0.98,
+  "evidence": [
+    {
+      "source": "dom_or_url",
+      "value": "__NEXT_DATA__ or /_next/",
+      "detail": "Next.js runtime marker"
+    }
+  ]
+}
+```
+
+Confidence is a practical signal-strength score, not a statistical
+probability. Scores near `1.0` represent distinctive direct fingerprints;
+lower scores represent weaker or inferred signals.
+
+### CLI and GUI behavior
+
+CLI runs append one JSON object per scanned site to
+`data/<profile>_technologies.jsonl`. The record contains the target URL, UTC
+scan time, and the same structured technology matches returned by the library.
+The desktop GUI exposes a **Detect site technologies** setting and prints a
+short summary in the Run console.
+
+### Live smoke-test example
+
+On a read-only smoke scan of `https://mory.dev`, the detector returned:
+
+| Technology | Category | Confidence | Interpretation |
+| --- | --- | ---: | --- |
+| Astro | Web framework | 0.98 | Direct Astro runtime marker. |
+| Vercel | Hosting | 0.95 | Vercel hostname or response-header marker. |
+| Django | Backend framework | 0.60 | Lower-confidence HTML inference, not proof. |
+
+Technology stacks change over time, so this table is an example of the result
+format rather than a permanent claim about the site.
+
+### External detectors and extensions
+
+FormHarvester does not require Wappalyzer, a hosted API, or a browser extension.
+This keeps the desktop package self-contained and avoids per-lookup API costs.
+An external provider can be added later behind an optional provider interface if
+broader coverage is needed.
+
+## Package layout (2.4.2)
 
 ```
 src/formharvester/

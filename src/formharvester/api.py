@@ -28,6 +28,7 @@ from formharvester.captcha import create_solver
 from formharvester.captcha.base import CaptchaSolver
 from formharvester.core import HarvesterCore
 from formharvester.scraper import GoogleSearchMixin
+from formharvester.technology import TechnologyEvidence, TechnologyMatch
 
 __all__ = [
     "FormFillDetails",
@@ -36,6 +37,8 @@ __all__ = [
     "HarvestResult",
     "HarvestStatus",
     "HarvesterOptions",
+    "TechnologyEvidence",
+    "TechnologyMatch",
     "discover_sites",
     "harvest_site",
     "harvest_sites",
@@ -96,6 +99,7 @@ class HarvesterOptions:
     headless: bool = True
     max_time: int = 30
     debug: bool = False
+    detect_technologies: bool = True
     captcha_solver: CaptchaSolver | None = None
     captcha_provider: str | None = None
     dbc_username: str | None = None
@@ -129,6 +133,7 @@ class HarvestResult:
     url: str
     status: HarvestStatus
     emails: list[str] = field(default_factory=list)
+    technologies: list[TechnologyMatch] = field(default_factory=list)
 
     @property
     def submitted(self) -> bool:
@@ -180,6 +185,7 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
 
         self.send_form = opts.send_form
         self.DEBUG = opts.debug
+        self.detect_technologies = opts.detect_technologies
         self.max_time = opts.max_time
         self.HEADLESS = opts.headless
         self.DEV_SETTINGS = False
@@ -277,6 +283,7 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
         """Harvest one site: scrape emails and (optionally) submit its form."""
         self.last_status = None
         self.scraped_emails = set()
+        self.technologies = []
         self.visited_links = []
         self.name_filled = False
         self.crawl = True
@@ -296,7 +303,7 @@ class FormHarvester(HarvesterCore, GoogleSearchMixin, _InMemoryProgress):
 
         status: HarvestStatus = self.last_status or "ERROR"  # type: ignore[assignment]
         emails = sorted({email for (email, _url) in self.scraped_emails})
-        return HarvestResult(url=url, status=status, emails=emails)
+        return HarvestResult(url=url, status=status, emails=emails, technologies=list(self.technologies))
 
     def harvest_many(self, urls: Iterable[str]) -> Iterator[HarvestResult]:
         for url in urls:

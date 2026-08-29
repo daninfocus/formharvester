@@ -17,6 +17,7 @@ from formharvester.api import (
     harvest_sites,
 )
 from formharvester.core import __VERSION__
+from formharvester.technology import TechnologyEvidence, TechnologyMatch
 
 __version__ = __VERSION__
 
@@ -26,6 +27,8 @@ __all__ = [
     "CaptchaError",
     "HarvestResult",
     "HarvestStatus",
+    "TechnologyEvidence",
+    "TechnologyMatch",
     "HarvesterOptions",
     "__version__",
     "discover_sites",

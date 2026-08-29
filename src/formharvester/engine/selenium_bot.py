@@ -571,6 +571,9 @@ class SeleniumBot:
         chrome_options.add_argument("--disable-infobars")
         # chrome_options.add_argument("--disable-extensions")
         chrome_options.add_experimental_option("useAutomationExtension", False)
+        # Optional response-header evidence for the technology detector.  The
+        # detector remains functional when a driver does not expose logs.
+        chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
         chrome_options.add_argument("--disable-notifications")
         chrome_options.add_argument("--disable-plugins-discovery")
         # chrome_options.add_argument('--profile-directory=default')
