@@ -129,7 +129,9 @@
       </section>
 
       <section id="quick-start"><h2>Quick start</h2>
-        <h3>Run the desktop GUI</h3><pre><code><span class="command">formharvester gui</span></code></pre>
+        <h3>Run the desktop GUI</h3><pre><code><span class="command">formharvester gui</span>
+<span class="muted"># Optional developer-only controls</span>
+<span class="command">formharvester gui --dev</span></code></pre>
         <h3>Run a configured campaign</h3>
         <pre><code><span class="command">formharvester profile create roofing</span>
 <span class="command">formharvester profile use roofing</span>
@@ -277,7 +279,7 @@ with FormHarvester(details, options) as fh:
 <span class="command">formharvester leads metrics</span>
 <span class="command">formharvester leads export --output leads.csv</span></code></pre>
         <p>Lead reports are emitted from the local SQLite database. Use the Campaigns tab to configure score thresholds, technology rules, cooldowns, limits, dry runs, and selective autopilot. The Leads tab shows the same records with suppression and audit actions.</p>
-        <h3>Desktop GUI</h3><p>Open the Campaigns tab to toggle LLM-generated Subject and Message content and edit either direct text or prompts. Use Qualification &amp; safety for campaign-level autopilot rules. Use Settings for technology detection, provider credentials, model selection, and manual review. The Run tab prints per-site progress and pauses with editable generated content when review is enabled; the Leads tab shows the persistent funnel.</p>
+        <h3>Desktop GUI</h3><p>Open the Campaigns tab to toggle LLM-generated Subject and Message content and edit either direct text or prompts. Use Qualification &amp; safety for campaign-level autopilot rules. Use Settings for technology detection, provider credentials, model selection, and manual review. The Run tab prints per-site progress and pauses with editable generated content when review is enabled; the Leads tab shows the persistent funnel. Run <code>formharvester gui --dev</code> to reveal advanced developer-only controls, including form-fill preview mode.</p>
         <h3>External API health</h3><p>The top-right header contains separate health indicators for the configured LLM and CAPTCHA services. Green means the provider accepted the configured credentials and returned a valid response. Yellow means configuration is missing, the endpoint is unreachable, or the provider rejected the credentials. Gray means that integration is disabled. Checks run asynchronously, are briefly cached, and use non-generation/non-solving requests so they do not create LLM content or spend CAPTCHA credits.</p>
       </section>
 
@@ -317,6 +319,7 @@ with FormHarvester(details, options) as fh:
           <tr><td><code>engine.headless</code></td><td>Hide the Chrome window.</td><td><code>false</code></td></tr>
           <tr><td><code>engine.max_time</code></td><td>Maximum seconds allowed per site.</td><td><code>30</code></td></tr>
           <tr><td><code>engine.detect_technologies</code></td><td>Enable passive detection and JSONL export.</td><td><code>true</code></td></tr>
+          <tr><td><code>engine.debug_form</code></td><td>Developer-only preview mode that fills forms but never submits them. Visible with <code>gui --dev</code>.</td><td><code>false</code></td></tr>
           <tr><td><code>engine.generate_email_sources</code></td><td>Write the source URL beside each email.</td><td><code>true</code></td></tr>
           <tr><td><code>google.max_pages</code></td><td>Search result pages per query.</td><td><code>3</code></td></tr>
           <tr><td><code>captcha.provider</code></td><td><code>deathbycaptcha</code>, <code>2captcha</code>, <code>none</code>, or blank.</td><td>blank</td></tr>

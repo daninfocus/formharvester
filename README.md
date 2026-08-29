@@ -73,6 +73,10 @@ and LLM provider configuration. The Campaigns tab controls whether a campaign
 uses direct text or LLM-generated form content and configures selective
 autopilot safety rules.
 
+Advanced developer-only controls, including the form-fill preview toggle, are
+available with `formharvester gui --dev`. The normal GUI hides these controls
+and never runs saved debug mode.
+
 The top-right header shows live **LLM** and **CAPTCHA** health indicators. Green
 means the configured provider accepted the credentials and returned a valid
 response; yellow means the provider is missing, unreachable, or rejected the
@@ -112,7 +116,7 @@ Flags on `run` override the saved settings for that run only.
 | `engine.skip_ads` | Skip ad results. |
 | `engine.max_time` | Seconds allowed per website. |
 | `engine.generate_email_sources` | Also record the URL each email came from. |
-| `engine.debug_form` | Fill forms but never submit them. |
+| `engine.debug_form` | Developer-only preview mode: fill forms but never submit them. Visible in `formharvester gui --dev`. |
 | `engine.detect_technologies` | Passively detect technologies exposed by each site. |
 | `google.start_page` | Results page to start from. |
 | `google.max_pages` | Result pages to walk per query. |
