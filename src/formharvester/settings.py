@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, model_validator
 __all__ = [
     "CampaignProfile",
     "CaptchaSettings",
+    "CampaignPolicy",
     "EngineSettings",
     "FormFill",
     "GoogleSettings",
@@ -118,6 +119,21 @@ class LlmSettings(BaseModel):
         return getattr(self, f"{self.provider}_api_key")
 
 
+class CampaignPolicy(BaseModel):
+    """Qualification and selective-autopilot rules for one campaign."""
+
+    autopilot_enabled: bool = False
+    minimum_score: float = Field(default=60, ge=0, le=100)
+    require_review: bool = True
+    require_contact_form: bool = True
+    cooldown_days: int = Field(default=30, ge=0, le=3650)
+    max_submissions_per_run: int = Field(default=10, ge=1, le=10000)
+    max_submissions_per_day: int = Field(default=25, ge=1, le=100000)
+    dry_run: bool = False
+    include_technologies: list[str] = Field(default_factory=list)
+    exclude_technologies: list[str] = Field(default_factory=list)
+
+
 class Settings(BaseModel):
     active_profile: str = "default"
     engine: EngineSettings = Field(default_factory=EngineSettings)
@@ -169,6 +185,7 @@ class CampaignProfile(BaseModel):
     form_fill: FormFill = Field(default_factory=FormFill)
     queries: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    policy: CampaignPolicy = Field(default_factory=CampaignPolicy)
 
 
 # --- persistence ---------------------------------------------------------

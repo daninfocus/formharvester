@@ -61,6 +61,9 @@ HarvestStatus = Literal[
     "VISITED",
     "LLM_ERROR",
     "REVIEW_SKIPPED",
+    "POLICY_BLOCKED",
+    "NOT_QUALIFIED",
+    "DRY_RUN",
     "ERROR",
 ]
 

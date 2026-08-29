@@ -20,6 +20,8 @@ from formharvester.api import (
     harvest_sites,
 )
 from formharvester.core import __VERSION__
+from formharvester.leads import LeadRecord, LeadRepository
+from formharvester.qualification import PolicyDecision, QualificationResult
 from formharvester.technology import TechnologyEvidence, TechnologyMatch
 
 __version__ = __VERSION__
@@ -32,6 +34,10 @@ __all__ = [
     "HarvestStatus",
     "TechnologyEvidence",
     "TechnologyMatch",
+    "LeadRecord",
+    "LeadRepository",
+    "PolicyDecision",
+    "QualificationResult",
     "HarvesterOptions",
     "GeneratedFormContent",
     "LlmClient",

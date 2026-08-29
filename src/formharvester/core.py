@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from formharvester.captcha.detector import CaptchaMixin
 from formharvester.engine import SeleniumBot
 from formharvester.form_handler import FormHandlerMixin
+from formharvester.leads import LeadRecord
 from formharvester.scraper.emails import EmailScraperMixin
 from formharvester.technology import TechnologyDetector, TechnologyMatch
 from formharvester.utils import get_root_url
@@ -78,6 +79,9 @@ class HarvesterCore(SeleniumBot, CaptchaMixin, EmailScraperMixin, FormHandlerMix
     review_callback = None
     generated_content = None
     llm_error = None
+    form_found = False
+    qualification_score = 0.0
+    qualification_reasons: list[str] = []
 
     def bot_print(self, message: object, is_input: bool = False, figlet: bool = False) -> None:
         if figlet:
@@ -131,3 +135,35 @@ class HarvesterCore(SeleniumBot, CaptchaMixin, EmailScraperMixin, FormHandlerMix
             )
         self.technologies = sorted(existing.values(), key=lambda item: (item.category.lower(), item.name.lower()))
         return matches
+
+    def current_lead_snapshot(self, url: str) -> LeadRecord:
+        """Build the observable lead state for persistence and policy checks."""
+        from formharvester.qualification import qualify_site
+
+        technologies = [item.to_dict() for item in getattr(self, "technologies", [])]
+        emails = sorted({email for email, _source in getattr(self, "scraped_emails", set())})
+        qualification = qualify_site(
+            technologies=technologies,
+            emails=emails,
+            form_found=bool(getattr(self, "form_found", False)),
+        )
+        self.qualification_score = qualification.score
+        self.qualification_reasons = qualification.reasons
+        content = getattr(self, "generated_content", None)
+        return LeadRecord(
+            id="",
+            campaign=str(getattr(self, "mode", "library")),
+            domain=get_root_url(url),
+            url=url,
+            status=str(getattr(self, "last_status", None) or "VISITED"),
+            score=qualification.score,
+            reasons=qualification.reasons,
+            technologies=technologies,
+            emails=emails,
+            form_found=bool(getattr(self, "form_found", False)),
+            draft_subject=getattr(content, "subject", "") or "",
+            draft_message=getattr(content, "message", "") or "",
+            provider=getattr(content, "provider", "") or "",
+            model=getattr(content, "model", "") or "",
+            error=str(getattr(self, "llm_error", "") or ""),
+        )

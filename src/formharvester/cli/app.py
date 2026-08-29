@@ -15,7 +15,9 @@ from rich.console import Console
 from formharvester.captcha import create_solver
 from formharvester.cli.progress import ProgressMixin
 from formharvester.core import __FIGLET__, HarvesterCore
+from formharvester.leads import LeadRepository
 from formharvester.llm import ReviewCallback, create_llm_client
+from formharvester.qualification import PolicyDecision, evaluate_policy, qualify_site
 from formharvester.scraper import GoogleSearchMixin
 from formharvester.settings import CampaignProfile, Settings, data_dir, log_dir
 from formharvester.utils import get_root_url
@@ -55,18 +57,55 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
 
         for url in url_list:
             self.crawl = True
+            self.last_status = None
+            domain = get_root_url(url)
+            self.leads.upsert_discovered(self.mode, domain, url=url, query=self.google_term or "")
             try:
                 if url in self.visited_websites:
                     self.update_progress(url, status="VISITED", google=False)
+                    self.leads.update_enrichment(
+                        self.mode,
+                        domain,
+                        status="VISITED",
+                        score=0,
+                        reasons=["Already present in the visited-site filter."],
+                        technologies=[],
+                        emails=[],
+                        form_found=False,
+                        url=url,
+                    )
                     continue
                 status = self.process_url(url)
                 if status is None:
                     self.update_progress(url, status="VISITED", google=False)
-            except:
+            except Exception:
                 self.update_progress(url, status="ERROR", google=False)
+                self.last_status = "ERROR"
                 e = traceback.format_exc()
                 self.log(screenshot=True, error=e)
                 self.restart_driver()
+            status = self.last_status or "VISITED"
+            snapshot = self.current_lead_snapshot(url)
+            self.leads.update_enrichment(
+                self.mode,
+                domain,
+                status=status,
+                score=snapshot.score,
+                reasons=snapshot.reasons,
+                technologies=snapshot.technologies,
+                emails=snapshot.emails,
+                form_found=snapshot.form_found,
+                url=url,
+                draft_subject=snapshot.draft_subject,
+                draft_message=snapshot.draft_message,
+                provider=snapshot.provider,
+                model=snapshot.model,
+                error=snapshot.error,
+            )
+            saved_record = self.leads.get(self.mode, domain)
+            if status == "SUBMITTED" and saved_record is not None:
+                self.leads.record_attempt(saved_record.id, status, detail={"score": snapshot.score})
+                self.submissions_this_run += 1
             self.export_emails(filename=self.mode)
             self.export_technologies(url, filename=self.mode)
             if self.detect_technologies:
@@ -114,7 +153,12 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
                 timeout=settings.llm.request_timeout,
             )
         self.review_before_submit = bool(
-            self.llm_enabled and settings.llm.review_before_submit and not engine.debug_form
+            self.llm_enabled
+            and (
+                settings.llm.review_before_submit
+                or (profile.policy.autopilot_enabled and profile.policy.require_review)
+            )
+            and not engine.debug_form
         )
         if self.review_before_submit and self.review_callback is None:
             raise ValueError("Manual LLM review is available through the desktop GUI only.")
@@ -141,6 +185,11 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
         # the executable is launched from wherever the user keeps it.
         self.data_dir = data_dir()
         self.log_dir = str(log_dir())
+        self.leads = LeadRepository(self.data_dir)
+        self.policy = profile.policy
+        self.autopilot_enabled = self.policy.autopilot_enabled
+        self.dry_run = self.policy.dry_run
+        self.submissions_this_run = 0
 
         self.visited_websites = self.load_txt(self.website_log_file)  # visited urls globally (scraper)
 
@@ -163,6 +212,48 @@ class Bot(HarvesterCore, GoogleSearchMixin, ProgressMixin):
         self.get_remaining_pages()
 
         self.create_driver()
+
+    def _check_submission_policy(self, url: str, form_found: bool) -> PolicyDecision:
+        domain = get_root_url(url)
+        existing = self.leads.get(self.mode, domain) or self.leads.upsert_discovered(
+            self.mode,
+            domain,
+            url=url,
+            query=self.google_term or "",
+        )
+        technologies = [item.to_dict() for item in getattr(self, "technologies", [])]
+        emails = sorted({email for email, _source in getattr(self, "scraped_emails", set())})
+        qualification = qualify_site(technologies=technologies, emails=emails, form_found=form_found)
+        record = self.leads.update_enrichment(
+            self.mode,
+            domain,
+            status="QUALIFIED" if qualification.score >= self.policy.minimum_score else "NOT_QUALIFIED",
+            score=qualification.score,
+            reasons=qualification.reasons,
+            technologies=technologies,
+            emails=emails,
+            form_found=form_found,
+            url=url,
+        )
+        cooldown_allowed, cooldown_reason = self.leads.is_eligible_for_attempt(
+            existing.id,
+            cooldown_days=self.policy.cooldown_days,
+        )
+        return evaluate_policy(
+            record,
+            self.policy,
+            cooldown_allowed=cooldown_allowed,
+            cooldown_reason=cooldown_reason,
+            attempts_today=self.leads.count_attempts_today(self.mode),
+            attempts_this_run=self.submissions_this_run,
+            llm_enabled=self.llm_enabled,
+        )
+
+    def close(self):
+        try:
+            super().close()
+        finally:
+            self.leads.close()
 
     # --- persistence overrides (write files, then delegate to core state) --
 

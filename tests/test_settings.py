@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from formharvester.settings import (
+    CampaignPolicy,
     CampaignProfile,
     FormFill,
     GoogleSettings,
@@ -117,3 +118,11 @@ def test_google_bounds(field):
 def test_max_time_must_be_positive():
     with pytest.raises(ValidationError):
         Settings.model_validate({"engine": {"max_time": 0}})
+
+
+def test_campaign_policy_defaults_are_safe():
+    policy = CampaignPolicy()
+    assert policy.autopilot_enabled is False
+    assert policy.require_review is True
+    assert policy.cooldown_days == 30
+    assert policy.minimum_score == 60

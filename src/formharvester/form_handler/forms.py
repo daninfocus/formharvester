@@ -273,6 +273,7 @@ class FormHandlerMixin(_Base):
         self.generated_content = None
         self.llm_error = None
         self.name_filled = False
+        self.form_found = False
         self.scraped_emails = set()
         self.visited_links.clear()
 
@@ -294,9 +295,11 @@ class FormHandlerMixin(_Base):
 
         self.cms_check()
         inputs = self.wait_get_inputs()
+        self.form_found = bool(inputs)
 
         if contact and not self.css("textarea"):
             inputs = self.find_contact_page(url)
+            self.form_found = bool(inputs)
 
         if not self.crawl:
             return
@@ -312,8 +315,10 @@ class FormHandlerMixin(_Base):
             self.driver.switch_to.window(self.driver.window_handles[0])
             self.cms_check()
             inputs = self.wait_get_inputs()
+            self.form_found = bool(inputs)
             if not self.css("textarea"):
                 inputs = self.find_contact_page(url)
+                self.form_found = bool(inputs)
 
         if not self.crawl:
             return
@@ -323,6 +328,13 @@ class FormHandlerMixin(_Base):
             return True
 
         if inputs:
+            if getattr(self, "autopilot_enabled", False):
+                decision = self._check_submission_policy(url, bool(inputs))
+                if not decision.allowed and not getattr(self, "dry_run", False):
+                    self.bot_print("Submission blocked: " + " ".join(decision.reasons))
+                    self._set_status(url, "POLICY_BLOCKED")
+                    return False
+
             if getattr(self, "llm_enabled", False):
                 try:
                     generated = self._generate_form_content(url, inputs)
@@ -365,6 +377,10 @@ class FormHandlerMixin(_Base):
                         self.generated_content = reviewed
                     self.details["subject"] = generated.subject
                     self.details["message"] = generated.message
+
+            if getattr(self, "dry_run", False):
+                self._set_status(url, "DRY_RUN")
+                return True
 
             # Fill text/email inputs
             for i in inputs:
