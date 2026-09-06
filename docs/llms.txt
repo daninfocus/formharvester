@@ -1,0 +1,14 @@
+# FormHarvester
+
+> FormHarvester is an open-source Python tool and library for automated contact page discovery, website technology detection, and browser-driven form extraction and submission.
+
+## Blog & Engineering Articles
+
+- [Automated Form Intelligence: Heuristic Discovery and DOM Extraction Pipelines](https://formharvester.com/blog/automated-form-intelligence-heuristic-discovery/): An architectural guide to automated web contact page discovery, DOM form extraction heuristics, website technology fingerprinting, and browser automation.
+- [Blog Index](https://formharvester.com/blog/): All engineering articles, scraping heuristics, and architecture notes.
+
+## Key Pages
+
+- [Homepage](https://formharvester.com/): Product overview and downloads for Windows and Linux.
+- [Documentation](https://formharvester.com/docs/): Python CLI usage, API reference, technology detection, and workflows.
+- [RSS Feed](https://formharvester.com/rss.xml): RSS 2.0 feed of all published engineering articles.

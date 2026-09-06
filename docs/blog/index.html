@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blog — FormHarvester Engineering</title>
+<meta name="description" content="Technical articles, architecture deep dives, and heuristics on web form extraction, technology fingerprinting, and browser automation." />
+<link rel="canonical" href="https://formharvester.com/blog/" />
+<meta name="theme-color" content="#08090c" />
+<link rel="icon" href="/logo.png" type="image/png" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="FormHarvester" />
+<meta property="og:title" content="Blog — FormHarvester Engineering" />
+<meta property="og:description" content="Technical articles on automated web form extraction and technology detection." />
+<meta property="og:url" content="https://formharvester.com/blog/" />
+<meta property="og:image" content="https://formharvester.com/logo.jpeg" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Blog","name":"FormHarvester Blog","description":"Technical articles, architecture deep dives, and heuristics on web form extraction, technology fingerprinting, and browser automation.","url":"https://formharvester.com/blog/","blogPost":[{"@type":"BlogPosting","headline":"Automated Form Intelligence: Heuristic Discovery and DOM Extraction Pipelines","description":"An architectural guide to automated web contact page discovery, DOM form extraction heuristics, website technology fingerprinting, and browser automation.","datePublished":"2025-02-18","url":"https://formharvester.com/blog/automated-form-intelligence-heuristic-discovery/","author":{"@type":"Organization","name":"FormHarvester Editorial"}}]}
+</script>
+<style>
+    :root {
+      color-scheme: dark;
+      --bg: #08090c;
+      --panel: #0e1117;
+      --panel-2: #141922;
+      --fg: #e7e9ee;
+      --muted: #8b93a2;
+      --faint: #596170;
+      --accent: #8ecbff;
+      --green: #a7e3bd;
+      --yellow: #f0d99a;
+      --border: #202632;
+      --max: 960px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font: 15px/1.7 ui-monospace, "SFMono-Regular", Consolas, monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: #c8eaff; text-decoration: underline; }
+
+    .site-header {
+      border-bottom: 1px solid var(--border);
+      background: rgba(8, 9, 12, 0.94);
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: blur(12px);
+    }
+    .header-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 0 1.25rem;
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 0.65rem; color: var(--fg); font-weight: 700; text-decoration: none; }
+    .brand img { width: 30px; height: 34px; object-fit: contain; }
+    .brand-f { color: var(--accent); }
+    .top-links { display: flex; gap: 1.25rem; font-size: 0.85rem; }
+
+    main.content {
+      max-width: var(--max);
+      width: 100%;
+      margin: 0 auto;
+      padding: 3.5rem 1.25rem 6rem;
+      flex: 1;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    .blog-header { margin-bottom: 3.5rem; }
+    .blog-header h1 { font-size: clamp(2rem, 4.5vw, 3.2rem); margin-bottom: 0.8rem; letter-spacing: -0.03em; }
+    .blog-header p.lede { color: var(--muted); font-size: 1.05rem; max-width: 65ch; }
+
+    .blog-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 1.75rem;
+      transition: border-color 0.2s;
+    }
+    .blog-card:hover { border-color: var(--accent); }
+    .card-meta { display: flex; align-items: center; gap: 0.6rem; color: var(--muted); font-size: 0.82rem; margin-bottom: 0.75rem; }
+    .blog-card h2 { font-size: 1.45rem; line-height: 1.3; margin-bottom: 0.75rem; }
+    .blog-card h2 a { color: var(--fg); }
+    .blog-card h2 a:hover { color: var(--accent); }
+    .blog-card p { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.25rem; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+    .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .tag { font-size: 0.75rem; color: var(--muted); background: var(--panel-2); border: 1px solid var(--border); padding: 0.2rem 0.5rem; border-radius: 4px; }
+    .read-link { font-size: 0.85rem; font-weight: 700; color: var(--accent); }
+
+    /* Single Post */
+    .breadcrumbs { display: flex; gap: 0.5rem; color: var(--faint); font-size: 0.8rem; margin-bottom: 1.5rem; }
+    .breadcrumbs a { color: var(--muted); }
+    .post-header { margin-bottom: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: 2rem; }
+    .post-header h1 { font-size: clamp(1.9rem, 4.5vw, 2.9rem); line-height: 1.2; margin: 0.75rem 0; }
+    .post-lede { color: var(--muted); font-size: 1.1rem; }
+
+    .prose { font-size: 1rem; line-height: 1.8; color: var(--fg); }
+    .prose h2 { font-size: 1.55rem; margin: 3rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; color: #fff; }
+    .prose h3 { font-size: 1.15rem; margin: 2rem 0 0.6rem; color: #cfd5df; }
+    .prose p { margin-bottom: 1.5rem; }
+    .prose ul.blog-ul, .prose ol.blog-ol { margin: 0 0 1.5rem 1.5rem; }
+    .prose li { margin-bottom: 0.5rem; }
+    .prose strong { color: #fff; }
+    .inline-code { color: #cde9ff; background: #10141c; border: 1px solid var(--border); border-radius: 4px; padding: 0.15rem 0.4rem; font-size: 0.88em; }
+    .code-block { background: #0e1117; border: 1px solid var(--border); border-radius: 6px; padding: 1.25rem; margin: 1.75rem 0; overflow-x: auto; font-size: 0.88rem; line-height: 1.55; color: #d4e7f7; }
+    .table-wrapper { overflow-x: auto; margin: 2rem 0; border: 1px solid var(--border); border-radius: 6px; }
+    .blog-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left; }
+    .blog-table th { background: var(--panel); padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: #fff; }
+    .blog-table td { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); color: var(--muted); }
+    .blog-table tr:last-child td { border-bottom: none; }
+
+    .author-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 1.5rem; margin-top: 3.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .author-box h3 { font-size: 1rem; margin-bottom: 0.25rem; }
+    .author-box p { color: var(--muted); font-size: 0.85rem; }
+
+    .site-footer { border-top: 1px solid var(--border); padding: 2.5rem 1.25rem; color: var(--muted); font-size: 0.82rem; }
+    .footer-inner { max-width: var(--max); margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+    .footer-links { display: flex; gap: 1rem; }
+  </style>
+</head>
+<body>
+  
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/">
+        <img src="/logo.png" alt="FormHarvester" width="34" height="38" />
+        <span><span class="brand-f">F</span>ormHarvester</span>
+      </a>
+      <div class="top-links">
+        <a href="/">Home</a>
+        <a href="/docs/">Docs</a>
+        <a href="/blog/" style="color: var(--accent); font-weight: 700;">Blog</a>
+        <a href="https://github.com/dariomory/formharvester" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </div>
+  </header>
+  <main class="content">
+    <header class="blog-header">
+      <p class="eyebrow">Engineering & Research</p>
+      <h1>Notes on form extraction</h1>
+      <p class="lede">Deep dives into heuristic web discovery, DOM parsing pipelines, technology fingerprinting, and headless browser automation.</p>
+    </header>
+    <div class="blog-list">
+      
+    <article class="blog-card">
+      <div class="card-meta">
+        <time datetime="2025-02-18">February 18, 2025</time>
+        <span>•</span>
+        <span>FormHarvester Editorial</span>
+      </div>
+      <h2><a href="/blog/automated-form-intelligence-heuristic-discovery/">Automated Form Intelligence: Heuristic Discovery and DOM Extraction Pipelines</a></h2>
+      <p>An architectural guide to automated web contact page discovery, DOM form extraction heuristics, website technology fingerprinting, and browser automation.</p>
+      <div class="card-footer">
+        <div class="tags">
+          <span class="tag">#form-extraction</span><span class="tag">#web-scraping</span><span class="tag">#browser-automation</span><span class="tag">#python</span><span class="tag">#technology-detection</span>
+        </div>
+        <a class="read-link" href="/blog/automated-form-intelligence-heuristic-discovery/">Read article &rarr;</a>
+      </div>
+    </article>
+  
+    </div>
+  </main>
+  
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p><span style="color: var(--accent); font-weight: 700;">FormHarvester</span> — automated form intelligence & technology detection engine.</p>
+      <div class="footer-links">
+        <a href="/">Home</a>
+        <a href="/docs/">Docs</a>
+        <a href="/blog/">Blog</a>
+        <a href="/rss.xml">RSS</a>
+        <a href="https://github.com/dariomory/formharvester" target="_blank" rel="noopener noreferrer">Source</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
