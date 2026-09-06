@@ -551,6 +551,35 @@ $("#btn-clear").addEventListener("click", () => {
   $("#console").innerHTML = '<span class="empty">Cleared.</span>';
 });
 
+$("#logo").addEventListener("click", () => window.pywebview.api.open_external("https://formharvester.com"));
+
+$("#btn-about").addEventListener("click", () => {
+  $("#about-current").textContent = "v" + state.version;
+  $("#about-dialog").hidden = false;
+});
+
+function closeAbout() {
+  $("#about-dialog").hidden = true;
+}
+
+$("#btn-close-about").addEventListener("click", closeAbout);
+$("#about-dialog").addEventListener("click", (event) => {
+  if (event.target === $("#about-dialog")) closeAbout();
+});
+
+document.querySelectorAll("[data-external]").forEach((el) => {
+  el.addEventListener("click", () => window.pywebview.api.open_external(el.dataset.external));
+});
+
+$("#btn-check-updates").addEventListener("click", async () => {
+  const result = await window.pywebview.api.check_for_updates();
+  if (!result.ok) return toast(result.error, true);
+  $("#about-latest").textContent = "v" + result.latest;
+  $("#about-status").textContent = result.update_available
+    ? "Update available — see the Releases link."
+    : "You're up to date.";
+});
+
 $("#btn-review-approve").addEventListener("click", async () => {
   if (!activeReviewId) return;
   setReviewBusy(true);

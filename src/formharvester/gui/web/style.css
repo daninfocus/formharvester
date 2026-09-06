@@ -49,6 +49,7 @@ header .logo {
   height: 1.7rem;
   width: auto;
   display: block;
+  cursor: pointer;
 }
 
 header h1 {
@@ -675,6 +676,7 @@ button.btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .review-card label { margin-top: 0.85rem; }
 .review-card textarea { min-height: 12rem; }
 .review-actions { justify-content: flex-end; margin-top: 1rem; }
+.about-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
 
 /* --- console --- */
 

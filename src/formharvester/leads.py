@@ -360,10 +360,28 @@ class LeadRepository:
         path.parent.mkdir(parents=True, exist_ok=True)
         records = self.list_leads(campaign=campaign, limit=1000)
         fields = [
-            "id", "campaign", "domain", "url", "query", "status", "score", "reasons",
-            "technologies", "emails", "form_found", "submitted", "draft_subject", "draft_message",
-            "provider", "model", "error", "created_at", "updated_at", "last_attempt_at",
-            "attempt_count", "suppressed",
+            "id",
+            "campaign",
+            "domain",
+            "url",
+            "query",
+            "status",
+            "score",
+            "reasons",
+            "technologies",
+            "emails",
+            "form_found",
+            "submitted",
+            "draft_subject",
+            "draft_message",
+            "provider",
+            "model",
+            "error",
+            "created_at",
+            "updated_at",
+            "last_attempt_at",
+            "attempt_count",
+            "suppressed",
         ]
         with path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=fields)

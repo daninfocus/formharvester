@@ -11,10 +11,12 @@ from __future__ import annotations
 import threading
 import time
 import traceback
+import webbrowser
 from collections import deque
 from collections.abc import Callable
 from typing import Any
 
+import requests
 from pydantic import ValidationError
 
 from formharvester.cli.app import Bot
@@ -277,9 +279,7 @@ class Api:
 
         settings = load_settings()
         if not self._dev_mode and settings.engine.debug_form:
-            settings = settings.model_copy(
-                update={"engine": settings.engine.model_copy(update={"debug_form": False})}
-            )
+            settings = settings.model_copy(update={"engine": settings.engine.model_copy(update={"debug_form": False})})
         profile = load_profile(settings.active_profile)
         if not profile.queries:
             return {"ok": False, "error": "The selected campaign has no search queries yet."}
@@ -430,6 +430,55 @@ class Api:
             "health": self.get_health(),
         }
 
+    # --- updates and external links ------------------------------------
+
+    def open_external(self, url: str) -> dict[str, Any]:
+        """Open ``url`` in the default browser.
+
+        Plain links would navigate the pywebview window itself, so every
+        external link from the page goes through this bridge instead.
+        """
+        if not url.startswith(("https://", "http://")):
+            return {"ok": False, "error": "unsupported url"}
+        webbrowser.open(url)
+        return {"ok": True}
+
+    def check_for_updates(self) -> dict[str, Any]:
+        """Check the repository's latest GitHub release.
+
+        Runs synchronously because it is only ever triggered by an explicit
+        click on "Check for updates"; it blocks at most ~5s.
+        """
+        try:
+            response = requests.get(
+                "https://api.github.com/repos/dariomory/formharvester/releases/latest",
+                timeout=5,
+            )
+            response.raise_for_status()
+            data = response.json()
+            latest = data["tag_name"].lstrip("v")
+            url = data["html_url"]
+        except (requests.RequestException, KeyError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
+        latest_version = _parse_version(latest)
+        current_version = _parse_version(__VERSION__)
+        return {
+            "ok": True,
+            "current": __VERSION__,
+            "latest": latest,
+            "update_available": bool(latest_version and current_version and latest_version > current_version),
+            "url": url,
+        }
+
+
+def _parse_version(value: str) -> tuple[int, int, int] | None:
+    """Parse ``x.y.z`` (optionally ``v``-prefixed) into comparable ints."""
+    try:
+        major, minor, patch = (int(part) for part in value.lstrip("v").split(".")[:3])
+        return (major, minor, patch)
+    except ValueError:
+        return None
+
 
 def _first_error(exc: ValidationError) -> str:
     error = exc.errors()[0]
@@ -440,9 +489,7 @@ def _first_error(exc: ValidationError) -> str:
 def _profile_name_error(name: str) -> str | None:
     if not name:
         return "Campaign name cannot be empty."
-    if name in {".", ".."} or any(char in name for char in '<>:"/\\|?*') or any(
-        ord(char) < 32 for char in name
-    ):
+    if name in {".", ".."} or any(char in name for char in '<>:"/\\|?*') or any(ord(char) < 32 for char in name):
         return "Campaign names cannot contain path separators or Windows filename characters."
     if name.endswith((" ", ".")):
         return "Campaign names cannot end with a space or period."

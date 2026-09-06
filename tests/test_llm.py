@@ -73,11 +73,7 @@ def test_parser_accepts_fenced_json_and_requires_both_fields() -> None:
         (
             DeepSeekClient,
             "https://api.deepseek.com/chat/completions",
-            {
-                "choices": [
-                    {"message": {"content": '{"subject":"DeepSeek subject","message":"DeepSeek message"}'}}
-                ]
-            },
+            {"choices": [{"message": {"content": '{"subject":"DeepSeek subject","message":"DeepSeek message"}'}}]},
         ),
     ],
 )
@@ -130,7 +126,7 @@ class _Field:
 
     def get_attribute(self, name: str) -> str:
         if name == "outerHTML":
-            return f"<{self.tag_name} " + " ".join(f'{k}=\"{v}\"' for k, v in self.attributes.items()) + ">"
+            return f"<{self.tag_name} " + " ".join(f'{k}="{v}"' for k, v in self.attributes.items()) + ">"
         return self.attributes.get(name, "")
 
     def clear(self) -> None:

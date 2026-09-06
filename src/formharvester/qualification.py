@@ -56,6 +56,7 @@ def qualify_site(
         reasons.append("No public contact email found (+0)")
 
     if technologies:
+
         def confidence(item: dict[str, object]) -> float:
             try:
                 return float(str(item.get("confidence", 0) or 0))

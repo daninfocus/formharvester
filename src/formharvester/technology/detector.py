@@ -102,8 +102,9 @@ class TechnologyDetector:
         stylesheets: list[str] = []
         meta: dict[str, list[str]] = {}
         try:
-            snapshot = driver.execute_script(
-                """
+            snapshot = (
+                driver.execute_script(
+                    """
                 const metas = {};
                 for (const node of document.querySelectorAll('meta[name], meta[property]')) {
                   const key = (node.getAttribute('name') || node.getAttribute('property') || '').toLowerCase();
@@ -125,7 +126,9 @@ class TechnologyDetector:
                   resources: performance.getEntriesByType('resource').map(entry => entry.name)
                 };
                 """
-            ) or {}
+                )
+                or {}
+            )
             scripts = [str(value) for value in snapshot.get("scripts", []) if value]
             stylesheets = [str(value) for value in snapshot.get("stylesheets", []) if value]
             meta = {
@@ -197,19 +200,11 @@ class TechnologyDetector:
         """Return deduplicated matches sorted by category and name."""
 
         html = signals.html.lower()
-        all_urls = "\n".join(
-            [signals.url, *signals.scripts, *signals.stylesheets, *signals.resources]
-        ).lower()
+        all_urls = "\n".join([signals.url, *signals.scripts, *signals.stylesheets, *signals.resources]).lower()
         headers = _normalise_headers(signals.headers)
         header_text = "\n".join(f"{key}: {value}" for key, value in headers.items()).lower()
-        cookie_names = {
-            value.split("=", 1)[0].strip()
-            for value in signals.cookies
-            if value.split("=", 1)[0].strip()
-        }
-        meta_text = "\n".join(
-            f"{key}: {' '.join(values)}" for key, values in signals.meta.items()
-        ).lower()
+        cookie_names = {value.split("=", 1)[0].strip() for value in signals.cookies if value.split("=", 1)[0].strip()}
+        meta_text = "\n".join(f"{key}: {' '.join(values)}" for key, values in signals.meta.items()).lower()
         globals_lower = {value.lower() for value in signals.js_globals}
         matches: list[TechnologyMatch] = []
 
@@ -284,9 +279,8 @@ class TechnologyDetector:
             add("Webflow", "Website builder", 0.95, "html_or_url", "Webflow marker", "Webflow DOM or asset")
 
         # Frontend frameworks and asset libraries.
-        if (
-            "__next_data__" in globals_lower
-            or re.search(r"id=[\"']__next_data__[\"']|/_next/(?:static|data)/", html + all_urls)
+        if "__next_data__" in globals_lower or re.search(
+            r"id=[\"']__next_data__[\"']|/_next/(?:static|data)/", html + all_urls
         ):
             add("Next.js", "Web framework", 0.98, "dom_or_url", "__NEXT_DATA__ or /_next/", "Next.js runtime marker")
         if "__nuxt__" in globals_lower or re.search(r"__nuxt__|/_nuxt/", html + all_urls):

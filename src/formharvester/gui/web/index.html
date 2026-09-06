@@ -8,7 +8,7 @@
 <body>
 
 <header>
-  <img class="logo" src="logo.png" alt="" width="155" height="169" />
+  <img class="logo" id="logo" src="logo.png" alt="" title="formharvester.com" width="155" height="169" />
   <h1><span class="brand-f">F</span>ormHarvester</h1>
   <span class="version" id="version"></span>
   <div class="autosave-status saved" id="autosave-status" role="status" aria-live="polite">
@@ -25,6 +25,7 @@
       <span>CAPTCHA</span>
     </span>
   </div>
+  <button id="btn-about" class="btn">About</button>
   <div class="status">
     <span class="dot" id="status-dot"></span>
     <span id="status-text">idle</span>
@@ -374,6 +375,21 @@
       <button class="btn primary" id="btn-review-approve">Approve and submit</button>
     </div>
   </section>
+</div>
+<div id="about-dialog" class="review-dialog" hidden>
+  <div class="review-card">
+    <h2>About FormHarvester</h2>
+    <p>Version <span id="about-current"></span></p>
+    <p>Latest release <span id="about-latest">unknown</span></p>
+    <p id="about-status"></p>
+    <div class="about-actions">
+      <button id="btn-check-updates" class="btn">Check for updates</button>
+      <button class="btn" data-external="https://formharvester.com">Website</button>
+      <button class="btn" data-external="https://github.com/dariomory/formharvester">GitHub</button>
+      <button class="btn" data-external="https://github.com/dariomory/formharvester/releases">Releases</button>
+      <button id="btn-close-about" class="btn">Close</button>
+    </div>
+  </div>
 </div>
 
 <footer id="home-path"></footer>
