@@ -1,0 +1,604 @@
+import os
+import random
+import re
+import sys
+import time
+
+import requests
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    TimeoutException,
+)
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select, WebDriverWait
+
+if getattr(sys, "frozen", False):
+    BASE_DIR = os.path.dirname(sys.executable)
+elif __file__:
+    BASE_DIR = os.path.dirname(os.path.realpath(__file__))
+
+
+class SeleniumBot:
+    _driver: webdriver.Chrome | None = None
+
+    # Where log() writes page dumps and screenshots. The CLI and GUI point this
+    # at the config directory; library callers keep the working directory.
+    log_dir = "log"
+
+    DEV_SETTINGS = None
+    COOKIES_PROFILE = None
+    HEADLESS = None
+    INCOGNITO = None
+    DISABLE_IMAGES = None
+    REMOTE_DEBUGGING = None
+    HIDE_EXTENSION = None
+    SINGLE_PROXY = None
+    PROXY_LIST = None
+    PROXY_AUTH = None
+    USERAGENT = None
+    FLASH = None
+    DATA_DIR = None
+    PROFILE = None
+
+    EXTENSIONS = []
+
+    WAIT = 99999
+
+    TIMEOUT = 5
+    MAX_SLEEP = 5
+
+    MIN_RAND = 0.64
+    MAX_RAND = 1.27
+    MIN_RAND_LONG = 4.78
+    MAX_RAND_LONG = 11.1
+
+    NUM_MOUSE_MOVES = 10
+
+    crawl = True
+
+    @property
+    def driver(self) -> webdriver.Chrome:
+        """The active Chrome session. Call ``create_driver()``/``spawn_driver()`` first."""
+        assert self._driver is not None, "driver not created yet - call create_driver() first"
+        return self._driver
+
+    @driver.setter
+    def driver(self, value: webdriver.Chrome | None) -> None:
+        self._driver = value
+
+    def save_cookies(self) -> None:
+        """No-op: cookie persistence was never implemented upstream."""
+
+    def get(self, page, pre_sleep=0, sleep=0, timeout=False, check=False):
+
+        if not self.crawl:
+            return
+
+        if check:
+            try:
+                requests.get(page, timeout=8)
+            except:
+                return
+
+        if timeout:
+            self.driver.set_page_load_timeout(timeout)
+
+        time.sleep(pre_sleep)
+        try:
+            self.driver.get(page)
+            time.sleep(sleep)
+            if timeout:
+                self.driver.set_page_load_timeout(-1)
+            return True
+        except Exception as e:
+            print(e)
+            if timeout:
+                self.driver.set_page_load_timeout(-1)
+            return False
+
+    def get_wait(self, url, selector, wait=9999):
+        self.get(url)
+        return self.wait_show_element(selector, wait=wait)
+
+    def reload(self):
+        self.driver.refresh()
+
+    def close(self):
+        if self.COOKIES_PROFILE:
+            self.save_cookies()
+        try:
+            self.driver.quit()
+        except:
+            pass
+
+    def script(self, script, *args):
+        return self.driver.execute_script(script, *args)
+
+    def css(
+        self,
+        selector,
+        node=None,
+        getall=False,
+        attr=None,
+        wait=None,
+        wait_for=None,
+    ):
+
+        if wait:
+            w = self.wait_show_element(selector, wait=wait)
+            if not w:
+                return None
+        if wait_for:
+            w = self.wait_for_element(selector, wait=wait_for)
+            if not w:
+                return None
+
+        if getall:
+            el = self.get_elements_from(node if node else self.driver, selector)
+        else:
+            el = self.get_element_from(node if node else self.driver, selector)
+
+        if attr and el:
+            el = self.extract_attributes(el, attr)
+
+        return el
+
+    def xpath(self, selector, node=None, getall=False, attr=None, wait=None):
+        if wait:
+            w = self.wait_show_element(selector, xpath=True, wait=wait)
+            if not w:
+                return None
+
+        if getall:
+            el = self.get_elements_from(node if node else self.driver, selector, xpath=True)
+        else:
+            el = self.get_element_from(node if node else self.driver, selector, xpath=True)
+
+        if attr and el:
+            el = self.extract_attributes(el, attr)
+
+        return el
+
+    def get_attr(self, el, attr):
+        if type(attr) == list:
+            output = []
+            for a in attr:
+                if a == "text":
+                    output.append(el.text)
+                else:
+                    output.append(el.get_attribute(a))
+        else:
+            if attr == "text":
+                output = el.text
+            else:
+                output = el.get_attribute(attr)
+        return output
+
+    def extract_attributes(self, el, attr):
+        if type(el) == list:
+            return [self.get_attr(i, attr) for i in el]
+        else:
+            return self.get_attr(el, attr)
+
+    def contains_text(self, text):
+        try:
+            return self.driver.find_element(By.XPATH, f'//*[contains(text(), "{text}")]')
+        except NoSuchElementException:
+            return None
+
+    def contains_regex(self, regex):
+        page_text = self.css("body").text
+        if re.findall(rf"{regex}", page_text):
+            return True
+        else:
+            return False
+
+    def submit_form(self, element):
+        try:
+            element.submit()
+            return True
+        except TimeoutException:
+            return False
+
+    def wait_page_load(self):
+        while True:
+            page_state = self.script("return document.readyState;")
+            self.driver.implicitly_wait(1)
+            if page_state == "complete":
+                break
+        return
+
+    def wait_for_text(self, text, wait=99999):
+        try:
+            wait = WebDriverWait(self.driver, wait)
+            element = wait.until(EC.presence_of_element_located((By.XPATH, f'//*[contains(text(), "{text}")]')))
+            return element
+        except:
+            return None
+
+    def wait_for_regex(self, regex):
+        while True:
+            if self.contains_regex(regex):
+                return True
+            time.sleep(0.5)
+
+    def wait_for_element(self, selector, xpath=False, wait=99999):
+        try:
+            wait = WebDriverWait(self.driver, wait)
+            if xpath:
+                element = wait.until(EC.presence_of_element_located((By.XPATH, selector)))
+            else:
+                element = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, selector)))
+            return element
+        except:
+            return None
+
+    def wait_show_element(self, selector, xpath=False, wait=99999):
+        try:
+            wait = WebDriverWait(self.driver, wait)
+            if xpath:
+                element = wait.until(EC.visibility_of_element_located((By.XPATH, selector)))
+            else:
+                element = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, selector)))
+            return element
+        except:
+            return None
+
+    def wait_hide_element(self, selector, wait):
+        try:
+            wait = WebDriverWait(self.driver, wait)
+            element = wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, selector)))
+            return element
+        except:
+            return None
+
+    def wait_click_element(self, selector, wait):
+        try:
+            wait = WebDriverWait(self.driver, wait)
+            element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
+            return element
+        except:
+            return None
+
+    def element_is_present(self, selector):
+        try:
+            self.driver.find_element(By.CSS_SELECTOR, selector)
+            return True
+        except NoSuchElementException:
+            return False
+
+    def verify_element_present(self, selector):
+        if not self.element_is_present(selector):
+            raise Exception("Element %s not found" % selector)
+
+    def get_element_from(self, fromObject, selector, xpath=False):
+        try:
+            if xpath:
+                return fromObject.find_element(By.XPATH, selector)
+            else:
+                return fromObject.find_element(By.CSS_SELECTOR, selector)
+        except NoSuchElementException:
+            return None
+
+    def get_elements_from(self, fromObject, selector, xpath=False):
+        try:
+            if xpath:
+                return fromObject.find_elements(By.XPATH, selector)
+            else:
+                return fromObject.find_elements(By.CSS_SELECTOR, selector)
+        except NoSuchElementException:
+            return []
+
+    def get_element_from_value(self, fromObject, selector):
+        element = self.get_element_from(fromObject, selector)
+        if element:
+            return element.text
+        return None
+
+    def get_element_value(self, selector):
+        element = self.css(selector)
+        if element:
+            return element.text
+        return None
+
+    def get_element_from_attribute(self, fromObject, selector, attribute):
+        element = self.get_element_from(fromObject, selector)
+        if element:
+            return element.get_attribute(attribute)
+        return None
+
+    def get_element_attribute(self, selector, attribute):
+        element = self.css(selector)
+        if element:
+            return element.get_attribute(attribute)
+        return None
+
+    def get_parent_levels(self, node, levels):
+        path = ".."
+        if levels > 1:
+            for i in range(1, levels):
+                path = path + "/.."
+        return node.find_element(By.XPATH, path)
+
+    def get_parent_node(self, node):
+        return node.find_element(By.XPATH, "..")
+
+    def get_child_nodes(self, node):
+        return node.find_elements(By.XPATH, "./*")
+
+    def write(
+        self,
+        field,
+        text,
+        css=False,
+        xpath=False,
+        name=False,
+        wait=False,
+        clear=False,
+        human=False,
+        submit=False,
+    ):
+
+        if wait:
+            self.wait_show_element(field, wait=self.WAIT, xpath=xpath)
+
+        if css:
+            field = self.css(field)
+        elif xpath:
+            field = self.xpath(field)
+        elif name:
+            field = self.driver.find_element(By.NAME, field)
+
+        if clear:
+            if human:
+                while field.get_attribute("value") != "":
+                    field.send_keys(Keys.BACKSPACE)
+                    time.sleep(random.uniform(0.05, 0.1))
+                self.random_sleep()
+            else:
+                field.clear()
+
+        if human:
+            for letter in text:
+                field.send_keys(letter)
+                time.sleep(random.uniform(0.05, 0.2))
+        else:
+            field.send_keys(text)
+
+        if submit:
+            try:
+                field.send_keys(text)
+            except:
+                self.driver.execute_script(f'arguments[0].value = "{text}"', field)
+
+        return field
+
+    def press_key(self, key):
+        webdriver.ActionChains(self.driver).send_keys(key).perform()
+
+    def press_enter(self, field_object):
+        field_object.send_keys(Keys.RETURN)
+        return field_object
+
+    def click(self, element, wait=False, css=False, xpath=False, js_click=False, sleep=False, double=False):
+
+        if wait:
+            w = self.wait_show_element(element, wait=wait, xpath=xpath)
+            if not w:
+                return None
+
+        if sleep:
+            time.sleep(sleep)
+
+        if css:
+            element = self.css(element)
+        elif xpath:
+            element = self.xpath(element)
+
+        if double:
+            rng = 2
+        else:
+            rng = 1
+
+        for _ in range(rng):
+            try:
+                # use Selenium's built in click function
+                actions = webdriver.ActionChains(self.driver)
+                actions.move_to_element(element)
+                actions.click(element)
+                actions.perform()
+                return element
+            except:
+                try:
+                    script = (
+                        "var viewPortHeight = Math.max("
+                        "document.documentElement.clientHeight, window.innerHeight || 0);"
+                        "var elementTop = arguments[0].getBoundingClientRect().top;"
+                        "window.scrollBy(0, elementTop-(viewPortHeight/2));"
+                    )
+                    self.driver.execute_script(script)  # parent = the webdriver
+                    element.click()
+                except:
+                    # try `execute_script` as a last resort
+                    # print("attempting last ditch effort for click, `execute_script`")
+                    self.script("arguments[0].click();", element)
+                    return element
+
+    def select_checkbox(self, selector, name, deselect=False):
+        found_checkbox = False
+        checkboxes = self.css(selector, getall=True)
+        for checkbox in checkboxes:
+            if checkbox.get_attribute("name") == name:
+                found_checkbox = True
+                if not deselect and not checkbox.is_selected():
+                    checkbox.click()
+                if deselect and checkbox.is_selected():
+                    checkbox.click()
+        if not found_checkbox:
+            raise Exception("Checkbox %s not found." % name)
+
+    def select_option(self, selector, value):
+        found_option = False
+        options = self.css(selector, getall=True)
+        for option in options:
+            if option.get_attribute("value") == str(value):
+                found_option = True
+                option.click()
+        if not found_option:
+            raise Exception("Option %s not found" % (value))
+
+    def select_dropdown(self, value, xpath=False):
+        if xpath:
+            elem = Select(self.driver.find_element(By.XPATH, value))
+        else:
+            elem = Select(self.driver.find_element(By.CSS_SELECTOR, value))
+        return elem
+
+    def get_selected_option(self, selector):
+        options = self.css(selector)
+        for option in options:
+            if option.is_selected():
+                return option.get_attribute("value")
+
+    def is_option_selected(self, selector, value):
+        options = self.css(selector)
+        for option in options:
+            if option.is_selected() != (value == option.get_attribute("value")):
+                print(option.get_attribute("value"))
+                return False
+        return True
+
+    def drag_drop(self, drag, drop):
+        drag_item = self.css(drag)
+        target_item = self.css(drop)
+        action_chains = webdriver.ActionChains(self.driver)
+        action_chains.drag_and_drop(drag_item, target_item).perform()
+
+    def move_to_element(self, element):
+        self.driver.execute_script("return arguments[0].scrollIntoView();", element)
+        actions = webdriver.ActionChains(self.driver)
+        actions.move_to_element(element)
+        actions.perform()
+
+    def check_title(self, title):
+        return self.driver.title == title
+
+    def save_screenshot(self, path=f"{str(int(time.time()))}.png"):
+        self.driver.save_screenshot(path)
+
+    def scroll_up(self, y=100):
+        scroll = self.driver.execute_script("return document.documentElement.scrollTop")
+        self.driver.execute_script(f"scrollTo(0, {scroll - y})")
+
+    def scroll_down(self, y=400):
+        scroll = self.driver.execute_script("return document.documentElement.scrollTop")
+        self.driver.execute_script(f"scrollTo(0, {scroll + y})")
+
+    def log(self, screenshot=False, error=None):
+        try:
+            timestamp = str(int(time.time()))
+            filename = os.path.join(self.log_dir, timestamp)
+            output = ""
+
+            if not os.path.exists(self.log_dir):
+                os.makedirs(self.log_dir, exist_ok=True)
+
+            if screenshot:
+                self.save_screenshot(f"{filename}.png")
+
+            output += str(self.driver.current_url) + "\n\n"
+
+            if error:
+                output += f"{error}\n\n"
+
+            output += str(self.driver.page_source)
+
+            soup = BeautifulSoup(self.driver.page_source, "html.parser")
+            output += str(soup.prettify()) + "\n\n"
+
+            with open(f"{filename}.log", "w", encoding="utf8") as f:
+                f.write(output)
+
+        except Exception as e:
+            print(e)
+
+    def highlight(self, element, css=False):
+        if css:
+            element = self.css(element)
+        self.driver.execute_script("arguments[0].style.border='6px groove green'", element)
+
+    def download_file(url, path=BASE_DIR):
+        with open(path, "wb") as f:
+            r = requests.get(url)
+            for chunk in r.iter_content(1024):
+                f.write(chunk)
+
+    def random_sleep(self, *args, **kwargs):
+
+        if kwargs.get("long"):
+            time.sleep(random.uniform(self.MIN_RAND_LONG, self.MAX_RAND_LONG))
+
+        elif len(args) == 1:
+            time.sleep(random.uniform(1, args[0]))
+
+        elif len(args) == 2:
+            time.sleep(random.uniform(args[0], args[1]))
+
+        else:
+            time.sleep(random.uniform(self.MIN_RAND, self.MAX_RAND))
+
+    def create_driver(self):
+
+        chrome_options = webdriver.ChromeOptions()
+
+        if self.DEV_SETTINGS:
+            chrome_options.add_argument("--fast-start")
+            chrome_options.add_argument("--window-size=1920,1080")
+            chrome_options.add_argument("--window-position=1072,642")
+
+        if self.HEADLESS:
+            chrome_options.add_argument("--headless")
+
+        chrome_options.add_argument("--silent")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--log-level=3")
+        chrome_options.add_argument("--start-maximized")
+        chrome_options.add_argument("--disable-infobars")
+        # chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_experimental_option("useAutomationExtension", False)
+        # Optional response-header evidence for the technology detector.  The
+        # detector remains functional when a driver does not expose logs.
+        chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+        chrome_options.add_argument("--disable-notifications")
+        chrome_options.add_argument("--disable-plugins-discovery")
+        # chrome_options.add_argument('--profile-directory=default')
+        chrome_options.add_experimental_option(
+            "excludeSwitches",
+            [
+                "enable-automation",
+                # "ignore-certificate-errors",
+                "safebrowing-disable-auto-update",
+                "disable-client-side-phishing-detection",
+                "safebrowsing-disable-download-protection",
+                "enable-logging",  # Disable logging
+            ],
+        )
+
+        self.driver = webdriver.Chrome(options=chrome_options)
+
+        self.driver.maximize_window()
+
+    def spawn_driver(self):
+        if not self._driver:
+            self.create_driver()
+
+    def restart_driver(self):
+        if self._driver:
+            self.close()
+            time.sleep(3)
+        self.create_driver()

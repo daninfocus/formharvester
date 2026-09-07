@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>FormHarvester Blog</title>
+    <link>https://formharvester.com/blog/</link>
+    <description>Technical articles on web form extraction, technology detection, and browser automation.</description>
+    <language>en</language>
+    <atom:link href="https://formharvester.com/rss.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title><![CDATA[Automated Form Intelligence: Heuristic Discovery and DOM Extraction Pipelines]]></title>
+      <link>https://formharvester.com/blog/automated-form-intelligence-heuristic-discovery/</link>
+      <guid isPermaLink="true">https://formharvester.com/blog/automated-form-intelligence-heuristic-discovery/</guid>
+      <description><![CDATA[An architectural guide to automated web contact page discovery, DOM form extraction heuristics, website technology fingerprinting, and browser automation.]]></description>
+      <pubDate>Tue, 18 Feb 2025 00:00:00 GMT</pubDate>
+      <author>team@formharvester.com (FormHarvester Editorial)</author>
+    </item>
+  
+  </channel>
+</rss>
